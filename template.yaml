@@ -171,10 +171,6 @@ variables:
   [[generated.command_vars]]
 
 actions:
-  # Generated slot actions keep the signed target entity updated and
-  # optionally run active-mode custom actions for charge/discharge integrations.
-  [[generated.slot_actions]]
-
   - alias: "[[trace.validation_gate]]"
     choose:
       - alias: "[[trace.invalid_config_branch]]"
@@ -195,3 +191,7 @@ actions:
           - alias: "[[trace.stop_invalid_sensor]]"
             stop: >-
               [[message.invalid_sensor]]
+
+  # Generated slot actions keep the signed target entity updated and
+  # optionally run active-mode custom actions for charge/discharge integrations.
+  [[generated.slot_actions]]

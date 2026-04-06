@@ -237,6 +237,13 @@ SLOT_ACTION_TEMPLATE = """
       conditions:
         - condition: template
           value_template: "{{ should_write_target_power___SLOT__ }}"
+        - condition: template
+          value_template: >-
+            {% set blockers = expand(blocking_entities) %}
+            {% set blockers_clear = blockers | selectattr('state', 'eq', 'off') | list | count == blockers | count %}
+            {% set sensor_state = states(house_power_sensor) %}
+            {% set sensor_valid = sensor_state not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ signed_target___SLOT__ | float(0) == 0 or (blockers_clear and sensor_valid) }}
       sequence:
         - alias: "[[slot.__SLOT__]]: [[trace.prepare_target_context_suffix]]"
           variables:
@@ -277,6 +284,12 @@ SLOT_ACTION_TEMPLATE = """
       conditions:
         - condition: template
           value_template: "{{ should_run_discharge_actions___SLOT__ }}"
+        - condition: template
+          value_template: >-
+            {% set blockers = expand(blocking_entities) %}
+            {% set blockers_clear = blockers | selectattr('state', 'eq', 'off') | list | count == blockers | count %}
+            {% set sensor_state = states(house_power_sensor) %}
+            {{ blockers_clear and sensor_state not in ['unknown', 'unavailable', 'none', ''] }}
       sequence:
         - alias: "[[slot.__SLOT__]]: [[trace.prepare_discharge_context_suffix]]"
           variables:
@@ -298,6 +311,12 @@ SLOT_ACTION_TEMPLATE = """
       conditions:
         - condition: template
           value_template: "{{ should_run_charge_actions___SLOT__ }}"
+        - condition: template
+          value_template: >-
+            {% set blockers = expand(blocking_entities) %}
+            {% set blockers_clear = blockers | selectattr('state', 'eq', 'off') | list | count == blockers | count %}
+            {% set sensor_state = states(house_power_sensor) %}
+            {{ blockers_clear and sensor_state not in ['unknown', 'unavailable', 'none', ''] }}
       sequence:
         - alias: "[[slot.__SLOT__]]: [[trace.prepare_charge_context_suffix]]"
           variables:

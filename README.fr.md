@@ -17,7 +17,7 @@ URL brute d'import :
 ## Configuration
 
 - `Capteur de puissance maison` : capteur principal utilisé par l'algorithme. Le sélecteur n'affiche que les capteurs de puissance, mais Home Assistant ne permet pas de filtrer l'unité ici, donc il faut toujours choisir un capteur signé en `W` avec `import > 0` et `export < 0`.
-- `Entités de blocage` : liste optionnelle d'entités `binary_sensor` ou `input_boolean`. Le blueprint tourne seulement si toutes les entités sélectionnées sont à `off`. Si l'une passe à `on`, `unknown` ou `unavailable`, toutes les batteries gérées reviennent à neutre et toutes les actions d'arrêt sont exécutées.
+- `Entités de blocage` : liste optionnelle d'entités `binary_sensor` ou `input_boolean`. Le blueprint tourne seulement si toutes les entités sélectionnées sont à `off`. Si l'une passe à `on`, `unknown` ou `unavailable`, toutes les batteries gérées reviennent à neutre et toutes les actions d'arrêt sont exécutées. Les commandes non nulles et les actions personnalisées sont aussi revérifiées contre ces entités au moment exact de l'exécution pour éviter qu'un run déjà lancé continue à piloter une batterie après la sortie de `off`.
 
 Pour chaque slot batterie :
 
@@ -42,6 +42,7 @@ Exemple Zendure :
 - En charge opportuniste, il détecte un export réel, exige qu'au moins une batterie soit à `99 %` ou plus, puis remplit les batteries chargeables du SOC le plus bas vers le plus haut, en évitant autant que possible les batteries prioritaires en décharge.
 - Une bande morte interne fixe de `50 W` filtre les très petits écarts et évite les écritures inutiles ou les actions répétées. Elle remplace les anciens réglages visibles `Marge de décharge` et `Delta minimal de commande`.
 - La consigne écrite par le blueprint est signée : positive en décharge, négative en charge, `0` en neutre. Un passage à `0`, un capteur invalide, un blocage actif ou une inversion de signe provoquent une écriture immédiate sans attendre le cooldown.
+- La validation s'exécute maintenant avant toute écriture par batterie ou action personnalisée, et chaque commande non nulle est revérifiée contre l'état courant des entités de blocage juste avant l'exécution.
 - Les actions optionnelles de charge et de décharge tournent uniquement quand la batterie est active dans le sens correspondant. Elles sont utiles pour les intégrations qui ont besoin d'un `select`, d'un service additionnel, ou d'une traduction helper -> API vendor.
 - Les étapes internes de l'automatisation portent maintenant des noms explicites pour que les traces Home Assistant affichent plus clairement, pendant le debug, les écritures de consigne par batterie, les hooks de charge/décharge et les arrêts de validation.
 - Si un slot activé est incomplet, l'automatisation s'arrête avec un message de validation explicite indiquant s'il manque l'entité de consigne ou si les deux puissances sont à `0 W`.

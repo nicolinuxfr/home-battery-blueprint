@@ -32,7 +32,7 @@
   "input.house_power_sensor.name": "House power sensor",
   "input.house_power_sensor.description": "Main house power sensor. This selector only shows power sensors. Use a signed sensor in watts with positive values for import and negative values for export.",
   "input.blocking_entities.name": "Blocking entities",
-  "input.blocking_entities.description": "Optional entities that must all stay off for the blueprint to run. If any selected entity is on, unknown, or unavailable, the blueprint forces every managed battery back to neutral and stops all custom charge and discharge actions.",
+  "input.blocking_entities.description": "Optional entities that must all stay off for the blueprint to run. If any selected entity is on, unknown, or unavailable, the blueprint forces every managed battery back to neutral, stops all custom charge and discharge actions, and rechecks that guard again right before any non-zero command is sent.",
   "input.battery.soc_sensor.name": "State of charge sensor",
   "input.battery.soc_sensor.description": "Leave empty to ignore this battery slot. Otherwise, this selector only shows battery sensors that report a charge percentage, and the chosen sensor enables the slot. An enabled slot must also expose a numeric target entity and at least one non-zero power limit.",
   "input.battery.max_discharge_w.name": "Maximum discharge power",
