@@ -189,7 +189,7 @@ actions:
             value_template: "{{ validation_errors | count > 0 }}"
         sequence:
           - stop: >-
-              Invalid battery blueprint configuration:
+              [[message.invalid_config_prefix]]
               {{ validation_errors | join(' | ') }}
 
   - choose:
@@ -198,6 +198,6 @@ actions:
             value_template: "{{ operating_mode == 'invalid_sensor' }}"
         sequence:
           - stop: >-
-              House power sensor {{ house_power_sensor }} is unavailable or not numeric.
+              [[message.invalid_sensor]]
 
   [[generated.slot_actions]]

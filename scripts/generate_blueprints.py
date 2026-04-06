@@ -141,10 +141,10 @@ current_charge_number___SLOT__: "{{ states(battery___SLOT___charge_target_number
 
 SLOT_VALIDATION_TEMPLATE = """
 {% if slot___SLOT___used and slot___SLOT___discharge_direct and slot___SLOT___charge_direct and battery___SLOT___discharge_target_number == battery___SLOT___charge_target_number %}
-  {% set ns.errors = ns.errors + ['Battery __SLOT__ uses the same direct number for charge and discharge. Use custom actions for bidirectional control.'] %}
+  {% set ns.errors = ns.errors + ['[[slot.__SLOT__]] [[validation.same_direct_number.suffix]]'] %}
 {% endif %}
 {% if slot___SLOT___used and not (slot___SLOT___can_discharge or slot___SLOT___can_charge) %}
-  {% set ns.errors = ns.errors + ['Battery __SLOT__ is configured but has no usable charge or discharge interface.'] %}
+  {% set ns.errors = ns.errors + ['[[slot.__SLOT__]] [[validation.no_interface.suffix]]'] %}
 {% endif %}
 """.strip()
 
@@ -370,7 +370,7 @@ def build_version_line(template_value: str, version: str, lang: str) -> str:
         ) from exc
 
 
-def render_template(template: str, values: dict[str, str]) -> str:
+def render_once(template: str, values: dict[str, str]) -> str:
     errors: list[str] = []
 
     def repl(match: re.Match[str]) -> str:
@@ -395,6 +395,21 @@ def render_template(template: str, values: dict[str, str]) -> str:
         missing = ", ".join(sorted(set(errors)))
         raise SystemExit(f"Missing placeholder values for keys: {missing}")
     return rendered
+
+
+def render_template(template: str, values: dict[str, str]) -> str:
+    rendered = template
+    for _ in range(10):
+        next_rendered = render_once(rendered, values)
+        if next_rendered == rendered or not TOKEN_RE.search(next_rendered):
+            return next_rendered
+        rendered = next_rendered
+
+    unresolved = ", ".join(sorted(set(TOKEN_RE.findall(rendered))))
+    raise SystemExit(
+        "Unresolved placeholders remain after recursive rendering: "
+        + unresolved
+    )
 
 
 def slotize(template: str, slot: int) -> str:
