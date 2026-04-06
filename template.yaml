@@ -1,5 +1,5 @@
 blueprint:
-  name: "[[blueprint.name]]"
+  name: "[[blueprint.name]] ([[blueprint.version]])"
   description: |-
     [[blueprint.description]]
 
