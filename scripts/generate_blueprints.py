@@ -24,13 +24,6 @@ battery___SLOT___section:
       selector:
         entity:
           domain: sensor
-    battery___SLOT___actual_power_sensor:
-      name: "[[input.battery.actual_power_sensor.name]]"
-      description: "[[input.battery.actual_power_sensor.description]]"
-      default: ""
-      selector:
-        entity:
-          domain: sensor
     battery___SLOT___max_discharge_w:
       name: "[[input.battery.max_discharge_w.name]]"
       description: "[[input.battery.max_discharge_w.description]]"
@@ -62,10 +55,10 @@ battery___SLOT___section:
     battery___SLOT___cooldown_seconds:
       name: "[[input.battery.cooldown_seconds.name]]"
       description: "[[input.battery.cooldown_seconds.description]]"
-      default: 60
+      default: 0
       selector:
         number:
-          min: 5
+          min: 0
           max: 300
           step: 5
           unit_of_measurement: s
@@ -99,7 +92,6 @@ battery___SLOT___section:
 
 SLOT_BINDING_TEMPLATE = """
 battery___SLOT___soc_sensor: !input battery___SLOT___soc_sensor
-battery___SLOT___actual_power_sensor: !input battery___SLOT___actual_power_sensor
 battery___SLOT___max_discharge_w: !input battery___SLOT___max_discharge_w
 battery___SLOT___max_charge_w: !input battery___SLOT___max_charge_w
 battery___SLOT___priority_discharge: !input battery___SLOT___priority_discharge
@@ -114,7 +106,7 @@ battery___SLOT___stop_charge_actions: !input battery___SLOT___stop_charge_action
 SLOT_STATE_TEMPLATE = """
 slot___SLOT___used: "{{ battery___SLOT___soc_sensor != '' }}"
 slot___SLOT___soc: "{{ states(battery___SLOT___soc_sensor) | float(0) if slot___SLOT___used else 0 }}"
-slot___SLOT___actual_power: "{{ states(battery___SLOT___actual_power_sensor) | float(0) if battery___SLOT___actual_power_sensor != '' else 0 }}"
+slot___SLOT___actual_power: "0"
 slot___SLOT___has_discharge_actions: "{{ battery___SLOT___set_discharge_actions | count > 0 }}"
 slot___SLOT___has_stop_discharge_actions: "{{ battery___SLOT___stop_discharge_actions | count > 0 }}"
 slot___SLOT___has_charge_actions: "{{ battery___SLOT___set_charge_actions | count > 0 }}"
@@ -142,16 +134,16 @@ SLOT_COOLDOWN_TEMPLATE = """
 discharge_cooldown_ok___SLOT__: >-
   {% if not slot___SLOT___can_discharge %}
     false
-  {% elif battery___SLOT___actual_power_sensor != '' %}
-    {{ as_timestamp(now()) - as_timestamp(states[battery___SLOT___actual_power_sensor].last_changed, 0) >= battery___SLOT___cooldown_seconds | float(0) }}
+  {% elif battery___SLOT___cooldown_seconds | float(0) <= 0 %}
+    true
   {% else %}
     {{ automation_last_triggered_ts == 0 or as_timestamp(now()) - automation_last_triggered_ts >= battery___SLOT___cooldown_seconds | float(0) }}
   {% endif %}
 charge_cooldown_ok___SLOT__: >-
   {% if not slot___SLOT___can_charge %}
     false
-  {% elif battery___SLOT___actual_power_sensor != '' %}
-    {{ as_timestamp(now()) - as_timestamp(states[battery___SLOT___actual_power_sensor].last_changed, 0) >= battery___SLOT___cooldown_seconds | float(0) }}
+  {% elif battery___SLOT___cooldown_seconds | float(0) <= 0 %}
+    true
   {% else %}
     {{ automation_last_triggered_ts == 0 or as_timestamp(now()) - automation_last_triggered_ts >= battery___SLOT___cooldown_seconds | float(0) }}
   {% endif %}
@@ -163,8 +155,8 @@ discharge_active___SLOT__: "{{ operating_mode == 'discharge' and discharge_targe
 charge_active___SLOT__: "{{ operating_mode == 'charge' and charge_target___SLOT__ >= command_deadband_w }}"
 should_run_discharge_actions___SLOT__: "{{ slot___SLOT___has_discharge_actions and discharge_active___SLOT__ and discharge_cooldown_ok___SLOT__ }}"
 should_run_charge_actions___SLOT__: "{{ slot___SLOT___has_charge_actions and charge_active___SLOT__ and charge_cooldown_ok___SLOT__ }}"
-should_stop_discharge_actions___SLOT__: "{{ slot___SLOT___has_stop_discharge_actions and not discharge_active___SLOT__ and (slot___SLOT___actual_power > command_deadband_w or battery___SLOT___actual_power_sensor == '') }}"
-should_stop_charge_actions___SLOT__: "{{ slot___SLOT___has_stop_charge_actions and not charge_active___SLOT__ and (slot___SLOT___actual_power < (0 - command_deadband_w) or battery___SLOT___actual_power_sensor == '') }}"
+should_stop_discharge_actions___SLOT__: "{{ slot___SLOT___has_stop_discharge_actions and not discharge_active___SLOT__ }}"
+should_stop_charge_actions___SLOT__: "{{ slot___SLOT___has_stop_charge_actions and not charge_active___SLOT__ }}"
 """.strip()
 
 

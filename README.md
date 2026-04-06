@@ -22,10 +22,9 @@ Raw import URL:
 For each battery slot:
 
 - `State of charge sensor`: leaving it empty disables the slot.
-- `Actual power sensor`: optional signed power sensor used as a safety hint.
 - `Maximum discharge power` and `Maximum charge power`: manual limits used by the allocator.
 - `Priority on discharge`: prioritized batteries discharge first; opportunistic charging prefers non-priority batteries first.
-- `Command cooldown`: per-battery anti-spam delay.
+- `Command cooldown`: per-battery anti-spam delay for `set` actions only. Set it to `0` to disable it.
 - `Set/Stop discharge actions` and `Set/Stop charge actions`: optional custom actions with runtime variables such as `battery_slot`, `battery_soc`, `target_discharge_w`, `target_charge_w`, `house_power_w` and `export_surplus_w`.
 
 Zendure example:
@@ -44,10 +43,10 @@ Zendure example:
 - A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
 - Safety comes first: entering charge stops every managed discharge path first, and entering discharge stops every managed charge path first. The blueprint never intentionally charges and discharges managed batteries at the same time.
 - Stop actions exist to force a neutral state when the mode changes, when a blocking entity becomes active, or when the house power sensor becomes invalid. This prevents an action-based integration from keeping a stale previous command alive.
+- The cooldown only throttles `set` actions. `stop` actions ignore it on purpose, so a battery can always be forced back to neutral immediately.
 
 ## Known Limitations
 
 - The blueprint does not create a moving-average helper. If you want a smoothed house signal, provide an already filtered sensor as input.
 - For action-only batteries, stop actions should be idempotent because the blueprint may need to repeat them for safety.
-- The optional actual power sensor works best when it is signed: positive for discharge, negative for charge.
 - The blueprint metadata and documentation point to `nicolinuxfr/home-battery-blueprint`.

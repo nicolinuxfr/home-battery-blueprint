@@ -22,10 +22,9 @@ URL brute d'import :
 Pour chaque slot batterie :
 
 - `Capteur d'état de charge` : laisser vide désactive le slot.
-- `Capteur de puissance réelle` : capteur signé optionnel utilisé comme indice de sécurité.
 - `Puissance maximale de décharge` et `Puissance maximale de charge` : limites manuelles utilisées par l'algorithme.
 - `Prioritaire en décharge` : les batteries prioritaires se vident d'abord ; la charge opportuniste préfère d'abord les batteries non prioritaires.
-- `Cooldown de commande` : délai anti-spam par batterie.
+- `Cooldown de commande` : délai anti-spam par batterie pour les actions `set` uniquement. Mets `0` pour le désactiver.
 - `Actions de mise/arrêt de décharge` et `Actions de mise/arrêt de charge` : actions personnalisées optionnelles, avec des variables d'exécution comme `battery_slot`, `battery_soc`, `target_discharge_w`, `target_charge_w`, `house_power_w` et `export_surplus_w`.
 
 Exemple Zendure :
@@ -44,10 +43,10 @@ Exemple Zendure :
 - Une bande morte interne fixe de `50 W` filtre les très petits écarts et évite les écritures inutiles ou les actions répétées. Elle remplace les anciens réglages visibles `Marge de décharge` et `Delta minimal de commande`.
 - La sécurité passe avant tout : passer en charge coupe d'abord tous les chemins de décharge gérés, et passer en décharge coupe d'abord tous les chemins de charge gérés. Le blueprint ne cherche jamais à faire charger et décharger en même temps des batteries qu'il pilote lui-même.
 - Les actions d'arrêt servent à forcer un retour à neutre quand le mode change, quand une entité de blocage s'active, ou quand le capteur maison devient invalide. Cela évite qu'une intégration pilotée par actions conserve une ancienne consigne.
+- Le cooldown ne limite que les actions `set`. Les actions `stop` l'ignorent volontairement pour pouvoir forcer un retour à neutre immédiatement.
 
 ## Limites connues
 
 - Le blueprint ne crée pas lui-même de capteur de moyenne glissante. Si tu veux un signal lissé, fournis en entrée un capteur déjà filtré.
 - Pour les batteries pilotées uniquement par actions, les actions d'arrêt devraient être idempotentes, car le blueprint peut devoir les rejouer pour la sécurité.
-- Le capteur de puissance réelle optionnel fonctionne au mieux lorsqu'il est signé : positif en décharge, négatif en charge.
 - Les métadonnées du blueprint et la documentation pointent vers `nicolinuxfr/home-battery-blueprint`.
