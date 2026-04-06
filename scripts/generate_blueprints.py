@@ -231,12 +231,15 @@ should_run_charge_actions___SLOT__: >-
 
 
 SLOT_ACTION_TEMPLATE = """
-- choose:
-    - conditions:
+- alias: "[[slot.__SLOT__]]: [[trace.write_target_suffix]]"
+  choose:
+    - alias: "[[slot.__SLOT__]]: [[trace.target_update_branch_suffix]]"
+      conditions:
         - condition: template
           value_template: "{{ should_write_target_power___SLOT__ }}"
       sequence:
-        - variables:
+        - alias: "[[slot.__SLOT__]]: [[trace.prepare_target_context_suffix]]"
+          variables:
             battery_slot: __SLOT__
             battery_soc: "{{ slot___SLOT___soc }}"
             battery_actual_power_w: "{{ slot___SLOT___actual_power }}"
@@ -246,12 +249,14 @@ SLOT_ACTION_TEMPLATE = """
             target_power_w: "{{ signed_target___SLOT__ }}"
             target_discharge_w: "{{ discharge_target___SLOT__ }}"
             target_charge_w: "{{ charge_target___SLOT__ }}"
-        - choose:
+        - alias: "[[slot.__SLOT__]]: [[trace.select_target_service_suffix]]"
+          choose:
             - conditions:
                 - condition: template
                   value_template: "{{ battery___SLOT___target_power_entity.startswith('number.') }}"
               sequence:
-                - action: number.set_value
+                - alias: "[[slot.__SLOT__]]: [[trace.write_number_target_suffix]]"
+                  action: number.set_value
                   target:
                     entity_id: !input battery___SLOT___target_power_entity
                   data:
@@ -260,17 +265,21 @@ SLOT_ACTION_TEMPLATE = """
                 - condition: template
                   value_template: "{{ battery___SLOT___target_power_entity.startswith('input_number.') }}"
               sequence:
-                - action: input_number.set_value
+                - alias: "[[slot.__SLOT__]]: [[trace.write_input_number_target_suffix]]"
+                  action: input_number.set_value
                   target:
                     entity_id: !input battery___SLOT___target_power_entity
                   data:
                     value: "{{ target_power_w | round(0) | int(0) }}"
-- choose:
-    - conditions:
+- alias: "[[slot.__SLOT__]]: [[trace.run_discharge_actions_suffix]]"
+  choose:
+    - alias: "[[slot.__SLOT__]]: [[trace.discharge_actions_branch_suffix]]"
+      conditions:
         - condition: template
           value_template: "{{ should_run_discharge_actions___SLOT__ }}"
       sequence:
-        - variables:
+        - alias: "[[slot.__SLOT__]]: [[trace.prepare_discharge_context_suffix]]"
+          variables:
             battery_slot: __SLOT__
             battery_soc: "{{ slot___SLOT___soc }}"
             battery_actual_power_w: "{{ slot___SLOT___actual_power }}"
@@ -280,14 +289,18 @@ SLOT_ACTION_TEMPLATE = """
             target_power_w: "{{ signed_target___SLOT__ }}"
             target_discharge_w: "{{ discharge_target___SLOT__ }}"
             target_charge_w: "{{ charge_target___SLOT__ }}"
-        - choose: []
+        - alias: "[[slot.__SLOT__]]: [[trace.execute_discharge_actions_suffix]]"
+          choose: []
           default: !input battery___SLOT___discharge_actions
-- choose:
-    - conditions:
+- alias: "[[slot.__SLOT__]]: [[trace.run_charge_actions_suffix]]"
+  choose:
+    - alias: "[[slot.__SLOT__]]: [[trace.charge_actions_branch_suffix]]"
+      conditions:
         - condition: template
           value_template: "{{ should_run_charge_actions___SLOT__ }}"
       sequence:
-        - variables:
+        - alias: "[[slot.__SLOT__]]: [[trace.prepare_charge_context_suffix]]"
+          variables:
             battery_slot: __SLOT__
             battery_soc: "{{ slot___SLOT___soc }}"
             battery_actual_power_w: "{{ slot___SLOT___actual_power }}"
@@ -297,7 +310,8 @@ SLOT_ACTION_TEMPLATE = """
             target_power_w: "{{ signed_target___SLOT__ }}"
             target_discharge_w: "{{ discharge_target___SLOT__ }}"
             target_charge_w: "{{ charge_target___SLOT__ }}"
-        - choose: []
+        - alias: "[[slot.__SLOT__]]: [[trace.execute_charge_actions_suffix]]"
+          choose: []
           default: !input battery___SLOT___charge_actions
 """.strip()
 

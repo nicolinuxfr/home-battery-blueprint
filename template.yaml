@@ -177,18 +177,23 @@ actions:
   # optionally run active-mode custom actions for charge/discharge integrations.
   [[generated.slot_actions]]
 
-  - choose:
-      - conditions:
+  - alias: "[[trace.validation_gate]]"
+    choose:
+      - alias: "[[trace.invalid_config_branch]]"
+        conditions:
           - condition: template
             value_template: "{{ validation_errors | count > 0 }}"
         sequence:
-          - stop: >-
+          - alias: "[[trace.stop_invalid_config]]"
+            stop: >-
               [[message.invalid_config_prefix]]
               {{ validation_errors | join(' | ') }}
 
-      - conditions:
+      - alias: "[[trace.invalid_sensor_branch]]"
+        conditions:
           - condition: template
             value_template: "{{ operating_mode == 'invalid_sensor' }}"
         sequence:
-          - stop: >-
+          - alias: "[[trace.stop_invalid_sensor]]"
+            stop: >-
               [[message.invalid_sensor]]

@@ -43,6 +43,7 @@ Exemple Zendure :
 - Une bande morte interne fixe de `50 W` filtre les très petits écarts et évite les écritures inutiles ou les actions répétées. Elle remplace les anciens réglages visibles `Marge de décharge` et `Delta minimal de commande`.
 - La consigne écrite par le blueprint est signée : positive en décharge, négative en charge, `0` en neutre. Un passage à `0`, un capteur invalide, un blocage actif ou une inversion de signe provoquent une écriture immédiate sans attendre le cooldown.
 - Les actions optionnelles de charge et de décharge tournent uniquement quand la batterie est active dans le sens correspondant. Elles sont utiles pour les intégrations qui ont besoin d'un `select`, d'un service additionnel, ou d'une traduction helper -> API vendor.
+- Les étapes internes de l'automatisation portent maintenant des noms explicites pour que les traces Home Assistant affichent plus clairement, pendant le debug, les écritures de consigne par batterie, les hooks de charge/décharge et les arrêts de validation.
 - Si un slot activé est incomplet, l'automatisation s'arrête avec un message de validation explicite indiquant s'il manque l'entité de consigne ou si les deux puissances sont à `0 W`.
 
 ## Limites connues
