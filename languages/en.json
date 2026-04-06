@@ -16,7 +16,7 @@
   "input.blocking_entities.name": "Blocking entities",
   "input.blocking_entities.description": "Optional entities that must all stay off for the blueprint to run. If any selected entity is on, unknown, or unavailable, the blueprint forces every managed battery back to neutral and stops all custom charge and discharge actions.",
   "input.battery.soc_sensor.name": "State of charge sensor",
-  "input.battery.soc_sensor.description": "Leave empty to ignore this battery slot. Otherwise, this sensor enables the slot and provides its current charge percentage. An enabled slot must also expose at least one usable direction: a non-zero maximum power and the matching Set action.",
+  "input.battery.soc_sensor.description": "Leave empty to ignore this battery slot. Otherwise, this selector only shows battery sensors that report a charge percentage, and the chosen sensor enables the slot. An enabled slot must also expose at least one usable direction: a non-zero maximum power and the matching Set action.",
   "input.battery.max_discharge_w.name": "Maximum discharge power",
   "input.battery.max_discharge_w.description": "Manual discharge limit used by the allocator for this battery.",
   "input.battery.max_charge_w.name": "Maximum charge power",

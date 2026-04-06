@@ -23,7 +23,9 @@ battery___SLOT___section:
       default: ""
       selector:
         entity:
-          domain: sensor
+          filter:
+            - domain: sensor
+              device_class: battery
     battery___SLOT___max_discharge_w:
       name: "[[input.battery.max_discharge_w.name]]"
       description: "[[input.battery.max_discharge_w.description]]"

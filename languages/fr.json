@@ -16,7 +16,7 @@
   "input.blocking_entities.name": "Entités de blocage",
   "input.blocking_entities.description": "Entités optionnelles qui doivent toutes rester à off pour que le blueprint tourne. Si une entité sélectionnée est à on, unknown ou unavailable, le blueprint remet toutes les batteries gérées à neutre et arrête toutes les actions personnalisées de charge et de décharge.",
   "input.battery.soc_sensor.name": "Capteur d'état de charge",
-  "input.battery.soc_sensor.description": "Laisse ce champ vide pour ignorer ce slot. Sinon, ce capteur active le slot et fournit le pourcentage de charge courant. Un slot activé doit aussi exposer au moins une direction exploitable : une puissance maximale non nulle et l'action de mise correspondante.",
+  "input.battery.soc_sensor.description": "Laisse ce champ vide pour ignorer ce slot. Sinon, ce sélecteur n'affiche que les capteurs de batterie qui remontent un pourcentage de charge, et le capteur choisi active le slot. Un slot activé doit aussi exposer au moins une direction exploitable : une puissance maximale non nulle et l'action de mise correspondante.",
   "input.battery.max_discharge_w.name": "Puissance maximale de décharge",
   "input.battery.max_discharge_w.description": "Limite de décharge saisie manuellement et utilisée par l'algorithme d'allocation pour cette batterie.",
   "input.battery.max_charge_w.name": "Puissance maximale de charge",

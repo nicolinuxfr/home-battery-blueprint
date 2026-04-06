@@ -21,7 +21,7 @@ Raw import URL:
 
 For each battery slot:
 
-- `State of charge sensor`: leaving it empty disables the slot. If you fill it, the slot must also expose at least one usable direction: a non-zero maximum power plus the matching `Set` action.
+- `State of charge sensor`: leaving it empty disables the slot. The selector only shows battery sensors that report a percentage. If you fill it, the slot must also expose at least one usable direction: a non-zero maximum power plus the matching `Set` action.
 - `Maximum discharge power` and `Maximum charge power`: manual limits used by the allocator.
 - `Priority on discharge`: prioritized batteries discharge first; opportunistic charging prefers non-priority batteries first.
 - `Command cooldown`: per-battery anti-spam delay for `set` actions only. Set it to `0` to disable it.

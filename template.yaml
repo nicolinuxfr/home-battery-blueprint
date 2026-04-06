@@ -27,6 +27,7 @@ blueprint:
             - domain: input_boolean
 
     # Each battery slot is controlled through custom actions only.
+    # Generated SoC selectors are limited to battery percentage sensors.
     [[generated.slot_inputs]]
 
 mode: restart

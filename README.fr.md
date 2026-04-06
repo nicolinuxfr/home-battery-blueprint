@@ -21,7 +21,7 @@ URL brute d'import :
 
 Pour chaque slot batterie :
 
-- `Capteur d'état de charge` : laisser vide désactive le slot. Si tu le renseignes, le slot doit aussi exposer au moins une direction exploitable : une puissance maximale non nulle et l'action `set` correspondante.
+- `Capteur d'état de charge` : laisser vide désactive le slot. Le sélecteur n'affiche que les capteurs de batterie qui remontent un pourcentage. Si tu le renseignes, le slot doit aussi exposer au moins une direction exploitable : une puissance maximale non nulle et l'action `set` correspondante.
 - `Puissance maximale de décharge` et `Puissance maximale de charge` : limites manuelles utilisées par l'algorithme.
 - `Prioritaire en décharge` : les batteries prioritaires se vident d'abord ; la charge opportuniste préfère d'abord les batteries non prioritaires.
 - `Cooldown de commande` : délai anti-spam par batterie pour les actions `set` uniquement. Mets `0` pour le désactiver.
