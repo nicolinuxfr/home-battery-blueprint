@@ -8,11 +8,11 @@ This blueprint is intentionally generic. It does not try to normalize brand-spec
 - custom actions for discharge and/or charge
 - both at the same time if a battery needs a direct setpoint plus extra brand-specific steps
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicolinuxfr%2Fhome-battery-blueprint%2Fgh-pages%2Fen%2Funiversal_home_battery_power_manager.yaml)
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicolinuxfr%2Fhome-battery-blueprint%2Fgh-pages%2Fen%2Fhome_battery_manager.yaml)
 
 Raw import URL:
 
-`https://raw.githubusercontent.com/nicolinuxfr/home-battery-blueprint/gh-pages/en/universal_home_battery_power_manager.yaml`
+`https://raw.githubusercontent.com/nicolinuxfr/home-battery-blueprint/gh-pages/en/home_battery_manager.yaml`
 
 ## Configuration
 

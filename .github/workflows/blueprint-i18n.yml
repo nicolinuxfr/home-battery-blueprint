@@ -32,7 +32,7 @@ jobs:
           python-version: '3.12'
 
       - name: Validate template and dictionaries
-        run: python scripts/generate_blueprints.py --filename universal_home_battery_power_manager.yaml
+        run: python scripts/generate_blueprints.py --filename home_battery_manager.yaml
 
   publish-gh-pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -48,7 +48,7 @@ jobs:
           python-version: '3.12'
 
       - name: Generate localized blueprints
-        run: python scripts/generate_blueprints.py --filename universal_home_battery_power_manager.yaml
+        run: python scripts/generate_blueprints.py --filename home_battery_manager.yaml
 
       - name: Publish dist to gh-pages
         uses: peaceiris/actions-gh-pages@v4

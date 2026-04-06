@@ -8,11 +8,11 @@ Ce blueprint est volontairement générique. Il n'essaie pas d'unifier les APIs 
 - des actions personnalisées pour la décharge et/ou la charge
 - les deux à la fois si une batterie a besoin d'une consigne directe plus d'étapes propres à son intégration
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicolinuxfr%2Fhome-battery-blueprint%2Fgh-pages%2Ffr%2Funiversal_home_battery_power_manager.yaml)
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicolinuxfr%2Fhome-battery-blueprint%2Fgh-pages%2Ffr%2Fhome_battery_manager.yaml)
 
 URL brute d'import :
 
-`https://raw.githubusercontent.com/nicolinuxfr/home-battery-blueprint/gh-pages/fr/universal_home_battery_power_manager.yaml`
+`https://raw.githubusercontent.com/nicolinuxfr/home-battery-blueprint/gh-pages/fr/home_battery_manager.yaml`
 
 ## Configuration
 

@@ -320,7 +320,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--filename",
-        default="universal_home_battery_power_manager.yaml",
+        default="home_battery_manager.yaml",
         help="Filename used for each generated blueprint.",
     )
     parser.add_argument(
