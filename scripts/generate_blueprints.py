@@ -12,97 +12,102 @@ SLOTS = range(1, 5)
 
 
 SLOT_INPUT_TEMPLATE = """
-battery___SLOT___soc_sensor:
-  name: "[[slot.__SLOT__]] - [[input.battery.soc_sensor.name]]"
-  description: "[[input.battery.soc_sensor.description]]"
-  default: ""
-  selector:
-    entity:
-      domain: sensor
-battery___SLOT___actual_power_sensor:
-  name: "[[slot.__SLOT__]] - [[input.battery.actual_power_sensor.name]]"
-  description: "[[input.battery.actual_power_sensor.description]]"
-  default: ""
-  selector:
-    entity:
-      domain: sensor
-battery___SLOT___max_discharge_w:
-  name: "[[slot.__SLOT__]] - [[input.battery.max_discharge_w.name]]"
-  description: "[[input.battery.max_discharge_w.description]]"
-  default: 0
-  selector:
-    number:
-      min: 0
-      max: 5000
-      step: 10
-      unit_of_measurement: W
-      mode: box
-battery___SLOT___max_charge_w:
-  name: "[[slot.__SLOT__]] - [[input.battery.max_charge_w.name]]"
-  description: "[[input.battery.max_charge_w.description]]"
-  default: 0
-  selector:
-    number:
-      min: 0
-      max: 5000
-      step: 10
-      unit_of_measurement: W
-      mode: box
-battery___SLOT___priority_discharge:
-  name: "[[slot.__SLOT__]] - [[input.battery.priority_discharge.name]]"
-  description: "[[input.battery.priority_discharge.description]]"
-  default: false
-  selector:
-    boolean: {}
-battery___SLOT___cooldown_seconds:
-  name: "[[slot.__SLOT__]] - [[input.battery.cooldown_seconds.name]]"
-  description: "[[input.battery.cooldown_seconds.description]]"
-  default: 60
-  selector:
-    number:
-      min: 5
-      max: 300
-      step: 5
-      unit_of_measurement: s
-      mode: slider
-battery___SLOT___discharge_target_number:
-  name: "[[slot.__SLOT__]] - [[input.battery.discharge_target_number.name]]"
-  description: "[[input.battery.discharge_target_number.description]]"
-  default: ""
-  selector:
-    entity:
-      domain: number
-battery___SLOT___charge_target_number:
-  name: "[[slot.__SLOT__]] - [[input.battery.charge_target_number.name]]"
-  description: "[[input.battery.charge_target_number.description]]"
-  default: ""
-  selector:
-    entity:
-      domain: number
-battery___SLOT___set_discharge_actions:
-  name: "[[slot.__SLOT__]] - [[input.battery.set_discharge_actions.name]]"
-  description: "[[input.battery.set_discharge_actions.description]]"
-  default: []
-  selector:
-    action: {}
-battery___SLOT___stop_discharge_actions:
-  name: "[[slot.__SLOT__]] - [[input.battery.stop_discharge_actions.name]]"
-  description: "[[input.battery.stop_discharge_actions.description]]"
-  default: []
-  selector:
-    action: {}
-battery___SLOT___set_charge_actions:
-  name: "[[slot.__SLOT__]] - [[input.battery.set_charge_actions.name]]"
-  description: "[[input.battery.set_charge_actions.description]]"
-  default: []
-  selector:
-    action: {}
-battery___SLOT___stop_charge_actions:
-  name: "[[slot.__SLOT__]] - [[input.battery.stop_charge_actions.name]]"
-  description: "[[input.battery.stop_charge_actions.description]]"
-  default: []
-  selector:
-    action: {}
+battery___SLOT___section:
+  name: "[[slot.__SLOT__]]"
+  icon: mdi:battery
+  collapsed: true
+  input:
+    battery___SLOT___soc_sensor:
+      name: "[[input.battery.soc_sensor.name]]"
+      description: "[[input.battery.soc_sensor.description]]"
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+    battery___SLOT___actual_power_sensor:
+      name: "[[input.battery.actual_power_sensor.name]]"
+      description: "[[input.battery.actual_power_sensor.description]]"
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+    battery___SLOT___max_discharge_w:
+      name: "[[input.battery.max_discharge_w.name]]"
+      description: "[[input.battery.max_discharge_w.description]]"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 5000
+          step: 10
+          unit_of_measurement: W
+          mode: box
+    battery___SLOT___max_charge_w:
+      name: "[[input.battery.max_charge_w.name]]"
+      description: "[[input.battery.max_charge_w.description]]"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 5000
+          step: 10
+          unit_of_measurement: W
+          mode: box
+    battery___SLOT___priority_discharge:
+      name: "[[input.battery.priority_discharge.name]]"
+      description: "[[input.battery.priority_discharge.description]]"
+      default: false
+      selector:
+        boolean: {}
+    battery___SLOT___cooldown_seconds:
+      name: "[[input.battery.cooldown_seconds.name]]"
+      description: "[[input.battery.cooldown_seconds.description]]"
+      default: 60
+      selector:
+        number:
+          min: 5
+          max: 300
+          step: 5
+          unit_of_measurement: s
+          mode: slider
+    battery___SLOT___discharge_target_number:
+      name: "[[input.battery.discharge_target_number.name]]"
+      description: "[[input.battery.discharge_target_number.description]]"
+      default: ""
+      selector:
+        entity:
+          domain: number
+    battery___SLOT___charge_target_number:
+      name: "[[input.battery.charge_target_number.name]]"
+      description: "[[input.battery.charge_target_number.description]]"
+      default: ""
+      selector:
+        entity:
+          domain: number
+    battery___SLOT___set_discharge_actions:
+      name: "[[input.battery.set_discharge_actions.name]]"
+      description: "[[input.battery.set_discharge_actions.description]]"
+      default: []
+      selector:
+        action: {}
+    battery___SLOT___stop_discharge_actions:
+      name: "[[input.battery.stop_discharge_actions.name]]"
+      description: "[[input.battery.stop_discharge_actions.description]]"
+      default: []
+      selector:
+        action: {}
+    battery___SLOT___set_charge_actions:
+      name: "[[input.battery.set_charge_actions.name]]"
+      description: "[[input.battery.set_charge_actions.description]]"
+      default: []
+      selector:
+        action: {}
+    battery___SLOT___stop_charge_actions:
+      name: "[[input.battery.stop_charge_actions.name]]"
+      description: "[[input.battery.stop_charge_actions.description]]"
+      default: []
+      selector:
+        action: {}
 """.strip()
 
 
@@ -181,16 +186,16 @@ charge_cooldown_ok___SLOT__: >-
 
 
 SLOT_COMMAND_TEMPLATE = """
-discharge_active___SLOT__: "{{ operating_mode == 'discharge' and discharge_target___SLOT__ >= min_command_delta_w }}"
-charge_active___SLOT__: "{{ operating_mode == 'charge' and charge_target___SLOT__ >= min_command_delta_w }}"
-should_write_discharge_number___SLOT__: "{{ slot___SLOT___discharge_direct and discharge_active___SLOT__ and discharge_cooldown_ok___SLOT__ and (discharge_target___SLOT__ - current_discharge_number___SLOT__) | abs >= min_command_delta_w }}"
-should_write_charge_number___SLOT__: "{{ slot___SLOT___charge_direct and charge_active___SLOT__ and charge_cooldown_ok___SLOT__ and (charge_target___SLOT__ - current_charge_number___SLOT__) | abs >= min_command_delta_w }}"
+discharge_active___SLOT__: "{{ operating_mode == 'discharge' and discharge_target___SLOT__ >= command_deadband_w }}"
+charge_active___SLOT__: "{{ operating_mode == 'charge' and charge_target___SLOT__ >= command_deadband_w }}"
+should_write_discharge_number___SLOT__: "{{ slot___SLOT___discharge_direct and discharge_active___SLOT__ and discharge_cooldown_ok___SLOT__ and (discharge_target___SLOT__ - current_discharge_number___SLOT__) | abs >= command_deadband_w }}"
+should_write_charge_number___SLOT__: "{{ slot___SLOT___charge_direct and charge_active___SLOT__ and charge_cooldown_ok___SLOT__ and (charge_target___SLOT__ - current_charge_number___SLOT__) | abs >= command_deadband_w }}"
 should_run_discharge_actions___SLOT__: "{{ slot___SLOT___has_discharge_actions and discharge_active___SLOT__ and discharge_cooldown_ok___SLOT__ and (not slot___SLOT___discharge_direct or should_write_discharge_number___SLOT__) }}"
 should_run_charge_actions___SLOT__: "{{ slot___SLOT___has_charge_actions and charge_active___SLOT__ and charge_cooldown_ok___SLOT__ and (not slot___SLOT___charge_direct or should_write_charge_number___SLOT__) }}"
 should_reset_discharge_number___SLOT__: "{{ slot___SLOT___discharge_direct and not discharge_active___SLOT__ and current_discharge_number___SLOT__ | abs > 0 }}"
 should_reset_charge_number___SLOT__: "{{ slot___SLOT___charge_direct and not charge_active___SLOT__ and current_charge_number___SLOT__ | abs > 0 }}"
-should_stop_discharge_actions___SLOT__: "{{ slot___SLOT___has_stop_discharge_actions and not discharge_active___SLOT__ and (should_reset_discharge_number___SLOT__ or slot___SLOT___actual_power > min_command_delta_w or (not slot___SLOT___discharge_direct and battery___SLOT___actual_power_sensor == '')) }}"
-should_stop_charge_actions___SLOT__: "{{ slot___SLOT___has_stop_charge_actions and not charge_active___SLOT__ and (should_reset_charge_number___SLOT__ or slot___SLOT___actual_power < (0 - min_command_delta_w) or (not slot___SLOT___charge_direct and battery___SLOT___actual_power_sensor == '')) }}"
+should_stop_discharge_actions___SLOT__: "{{ slot___SLOT___has_stop_discharge_actions and not discharge_active___SLOT__ and (should_reset_discharge_number___SLOT__ or slot___SLOT___actual_power > command_deadband_w or (not slot___SLOT___discharge_direct and battery___SLOT___actual_power_sensor == '')) }}"
+should_stop_charge_actions___SLOT__: "{{ slot___SLOT___has_stop_charge_actions and not charge_active___SLOT__ and (should_reset_charge_number___SLOT__ or slot___SLOT___actual_power < (0 - command_deadband_w) or (not slot___SLOT___charge_direct and battery___SLOT___actual_power_sensor == '')) }}"
 """.strip()
 
 
@@ -219,7 +224,6 @@ SLOT_ACTION_TEMPLATE = """
             export_surplus_w: "{{ export_surplus_w }}"
             target_discharge_w: 0
             target_charge_w: "{{ charge_target___SLOT__ }}"
-            margin_w: "{{ margin_w }}"
         - choose: []
           default: !input battery___SLOT___stop_discharge_actions
 - choose:
@@ -246,7 +250,6 @@ SLOT_ACTION_TEMPLATE = """
             export_surplus_w: "{{ export_surplus_w }}"
             target_discharge_w: "{{ discharge_target___SLOT__ }}"
             target_charge_w: 0
-            margin_w: "{{ margin_w }}"
         - choose: []
           default: !input battery___SLOT___stop_charge_actions
 - choose:
@@ -273,7 +276,6 @@ SLOT_ACTION_TEMPLATE = """
             export_surplus_w: "{{ export_surplus_w }}"
             target_discharge_w: "{{ discharge_target___SLOT__ }}"
             target_charge_w: 0
-            margin_w: "{{ margin_w }}"
         - choose: []
           default: !input battery___SLOT___set_discharge_actions
 - choose:
@@ -300,7 +302,6 @@ SLOT_ACTION_TEMPLATE = """
             export_surplus_w: "{{ export_surplus_w }}"
             target_discharge_w: 0
             target_charge_w: "{{ charge_target___SLOT__ }}"
-            margin_w: "{{ margin_w }}"
         - choose: []
           default: !input battery___SLOT___set_charge_actions
 """.strip()

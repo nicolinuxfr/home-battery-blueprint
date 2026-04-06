@@ -6,6 +6,8 @@ blueprint:
     [[blueprint.version.line]] - [Changelog](https://github.com/nicolinuxfr/home-battery-blueprint/blob/main/CHANGELOG.md#[[blueprint.version.nodots]])
   domain: automation
   source_url: https://github.com/nicolinuxfr/home-battery-blueprint
+  homeassistant:
+    min_version: 2024.6.0
   input:
     house_power_sensor:
       name: "[[input.house_power_sensor.name]]"
@@ -13,36 +15,16 @@ blueprint:
       selector:
         entity:
           domain: sensor
-    margin_w:
-      name: "[[input.margin_w.name]]"
-      description: "[[input.margin_w.description]]"
-      default: 100
-      selector:
-        number:
-          min: 0
-          max: 500
-          step: 5
-          unit_of_measurement: W
-          mode: slider
-    control_gate_entity:
-      name: "[[input.control_gate_entity.name]]"
-      description: "[[input.control_gate_entity.description]]"
+    blocking_entities:
+      name: "[[input.blocking_entities.name]]"
+      description: "[[input.blocking_entities.description]]"
+      default: []
       selector:
         entity:
-          domain:
-            - binary_sensor
-            - input_boolean
-    min_command_delta_w:
-      name: "[[input.min_command_delta_w.name]]"
-      description: "[[input.min_command_delta_w.description]]"
-      default: 50
-      selector:
-        number:
-          min: 5
-          max: 500
-          step: 5
-          unit_of_measurement: W
-          mode: slider
+          multiple: true
+          filter:
+            - domain: binary_sensor
+            - domain: input_boolean
 
     [[generated.slot_inputs]]
 
@@ -52,24 +34,25 @@ triggers:
   - trigger: state
     entity_id: !input house_power_sensor
   - trigger: state
-    entity_id: !input control_gate_entity
+    entity_id: !input blocking_entities
 
 variables:
   house_power_sensor: !input house_power_sensor
-  control_gate_entity: !input control_gate_entity
-  margin_w: !input margin_w
-  min_command_delta_w: !input min_command_delta_w
+  blocking_entities: !input blocking_entities
+  command_deadband_w: 50
 
   [[generated.slot_bindings]]
 
   automation_last_triggered_ts: >-
     {% set last = this.attributes.last_triggered %}
     {{ as_timestamp(last, 0) if last is not none else 0 }}
-  gate_blocked: "{{ states(control_gate_entity) in ['off', 'unknown', 'unavailable'] }}"
+  gate_blocked: >-
+    {% set blockers = expand(blocking_entities) %}
+    {{ blockers | selectattr('state', 'ne', 'off') | list | count > 0 }}
   house_power_state: "{{ states(house_power_sensor) }}"
   house_power_valid: "{{ house_power_state not in ['unknown', 'unavailable', 'none', ''] }}"
   house_power_w: "{{ house_power_state | float(0) }}"
-  import_need_w: "{{ [house_power_w - margin_w, 0] | max if house_power_valid else 0 }}"
+  import_need_w: "{{ [house_power_w, 0] | max if house_power_valid else 0 }}"
   export_surplus_w: "{{ [0 - house_power_w, 0] | max if house_power_valid else 0 }}"
 
   [[generated.slot_state_vars]]
@@ -94,9 +77,9 @@ variables:
       invalid_config
     {% elif not house_power_valid %}
       invalid_sensor
-    {% elif import_need_w >= min_command_delta_w and discharge_capable_count > 0 %}
+    {% elif import_need_w >= command_deadband_w and discharge_capable_count > 0 %}
       discharge
-    {% elif export_surplus_w >= min_command_delta_w and near_full_exists and charge_capable_count > 0 %}
+    {% elif export_surplus_w >= command_deadband_w and near_full_exists and charge_capable_count > 0 %}
       charge
     {% else %}
       neutral

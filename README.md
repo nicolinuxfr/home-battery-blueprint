@@ -1,6 +1,6 @@
 # home-battery-blueprint
 
-Localized Home Assistant blueprint project for steering up to four batteries from a single house power sensor. The blueprint focuses on discharge, can absorb real export through opportunistic charging, and mixes direct `number` entities with optional custom actions per battery.
+Localized Home Assistant blueprint project for steering up to four batteries from a single house power sensor. The blueprint focuses on discharge, can absorb real export through opportunistic charging, and mixes direct `number` entities with optional custom actions per battery. Each battery is grouped in its own collapsed section by default to keep the form compact.
 
 This blueprint is intentionally generic. It does not try to normalize brand-specific APIs. Instead, each battery slot can be driven by:
 
@@ -17,9 +17,7 @@ Raw import URL:
 ## Configuration
 
 - `House power sensor`: the main sensor used by the allocator. It must use `import > 0` and `export < 0`.
-- `Discharge margin`: watts subtracted from house demand before the blueprint starts discharging.
-- `Global control gate`: when this entity is `off`, all managed batteries are returned to neutral and all stop actions are executed.
-- `Minimum command delta`: ignores tiny target changes.
+- `Blocking entities`: optional list of `binary_sensor` or `input_boolean` entities. The blueprint runs only if every selected entity is `off`. If one becomes `on`, `unknown`, or `unavailable`, all managed batteries are returned to neutral and all stop actions are executed.
 
 For each battery slot:
 
@@ -34,8 +32,9 @@ For each battery slot:
 ## How It Works
 
 - The blueprint chooses one exclusive operating mode per run: `discharge`, `charge`, or `neutral`.
-- During discharge it allocates `max(house_power - margin, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
+- During discharge it allocates `max(house_power, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
 - During opportunistic charging it looks for real export, requires at least one battery at `99%` or above, and then fills charge-capable batteries from the lowest state of charge upward, avoiding discharge-priority batteries until needed.
+- A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
 - Safety comes first: entering charge stops every managed discharge path first, and entering discharge stops every managed charge path first. The blueprint never intentionally charges and discharges managed batteries at the same time.
 
 ## Known Limitations

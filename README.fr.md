@@ -1,6 +1,6 @@
 # home-battery-blueprint
 
-Projet de blueprint Home Assistant multilingue pour piloter jusqu'à quatre batteries à partir d'un seul capteur de puissance maison. Le blueprint se concentre sur la décharge, peut absorber un export réel via une charge opportuniste, et combine entités `number` directes et actions personnalisées par batterie.
+Projet de blueprint Home Assistant multilingue pour piloter jusqu'à quatre batteries à partir d'un seul capteur de puissance maison. Le blueprint se concentre sur la décharge, peut absorber un export réel via une charge opportuniste, et combine entités `number` directes et actions personnalisées par batterie. Chaque batterie est rangée dans sa propre section repliée par défaut pour garder un formulaire compact.
 
 Ce blueprint est volontairement générique. Il n'essaie pas d'unifier les APIs propres à chaque marque. À la place, chaque slot batterie peut être piloté par :
 
@@ -17,9 +17,7 @@ URL brute d'import :
 ## Configuration
 
 - `Capteur de puissance maison` : capteur principal utilisé par l'algorithme. Il doit suivre la convention `import > 0` et `export < 0`.
-- `Marge de décharge` : watts soustraits à la demande maison avant de démarrer la décharge.
-- `Entité de blocage global` : quand cette entité est à `off`, toutes les batteries gérées reviennent à neutre et toutes les actions d'arrêt sont exécutées.
-- `Delta minimal de commande` : ignore les petits changements de cible.
+- `Entités de blocage` : liste optionnelle d'entités `binary_sensor` ou `input_boolean`. Le blueprint tourne seulement si toutes les entités sélectionnées sont à `off`. Si l'une passe à `on`, `unknown` ou `unavailable`, toutes les batteries gérées reviennent à neutre et toutes les actions d'arrêt sont exécutées.
 
 Pour chaque slot batterie :
 
@@ -34,8 +32,9 @@ Pour chaque slot batterie :
 ## Fonctionnement
 
 - À chaque run, le blueprint choisit un seul mode exclusif : `discharge`, `charge` ou `neutral`.
-- En décharge, il répartit `max(house_power - margin, 0)` entre les batteries, en privilégiant d'abord les batteries marquées prioritaires puis en triant par pourcentage de charge décroissant.
+- En décharge, il répartit `max(house_power, 0)` entre les batteries, en privilégiant d'abord les batteries marquées prioritaires puis en triant par pourcentage de charge décroissant.
 - En charge opportuniste, il détecte un export réel, exige qu'au moins une batterie soit à `99 %` ou plus, puis remplit les batteries chargeables du SOC le plus bas vers le plus haut, en évitant autant que possible les batteries prioritaires en décharge.
+- Une bande morte interne fixe de `50 W` filtre les très petits écarts et évite les écritures inutiles ou les actions répétées. Elle remplace les anciens réglages visibles `Marge de décharge` et `Delta minimal de commande`.
 - La sécurité passe avant tout : passer en charge coupe d'abord tous les chemins de décharge gérés, et passer en décharge coupe d'abord tous les chemins de charge gérés. Le blueprint ne cherche jamais à faire charger et décharger en même temps des batteries qu'il pilote lui-même.
 
 ## Limites connues
