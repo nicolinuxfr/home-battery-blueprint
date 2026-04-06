@@ -1,5 +1,5 @@
 {
-  "blueprint.name": "Gestionnaire universel de batteries Home Assistant",
+  "blueprint.name": "Gestion de batteries domestiques",
   "blueprint.description": "Blueprint Home Assistant générique pour piloter jusqu'à quatre batteries. Il répartit la décharge selon la demande maison, peut déclencher une charge opportuniste en cas d'export réel, et combine entités number directes et actions personnalisées par batterie.",
   "blueprint.version.line": "Version : {version}",
   "slot.1": "Batterie 1",

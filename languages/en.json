@@ -1,5 +1,5 @@
 {
-  "blueprint.name": "Universal Home Battery Power Manager",
+  "blueprint.name": "Smart Home Battery",
   "blueprint.description": "Generic Home Assistant blueprint for up to four batteries. It allocates discharge from house demand, can trigger opportunistic charging during real export, and combines direct number entities with optional custom actions per battery.",
   "blueprint.version.line": "Version: {version}",
   "slot.1": "Battery 1",

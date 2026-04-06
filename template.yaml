@@ -1,11 +1,11 @@
 blueprint:
-  name: "[[blueprint.name]] ([[blueprint.version]])"
+  name: "[[blueprint.name]]"
   description: |-
     [[blueprint.description]]
 
-    [[blueprint.version.line]] - [Changelog](https://github.com/nicolinuxfr/solar-battery-blueprint/blob/main/CHANGELOG.md#[[blueprint.version.nodots]])
+    [[blueprint.version.line]] - [Changelog](https://github.com/nicolinuxfr/home-battery-blueprint/blob/main/CHANGELOG.md#[[blueprint.version.nodots]])
   domain: automation
-  source_url: https://github.com/nicolinuxfr/solar-battery-blueprint
+  source_url: https://github.com/nicolinuxfr/home-battery-blueprint
   input:
     house_power_sensor:
       name: "[[input.house_power_sensor.name]]"

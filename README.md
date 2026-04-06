@@ -1,4 +1,4 @@
-# solar-battery-blueprint
+# home-battery-blueprint
 
 Localized Home Assistant blueprint project for steering up to four batteries from a single house power sensor. The blueprint focuses on discharge, can absorb real export through opportunistic charging, and mixes direct `number` entities with optional custom actions per battery.
 
@@ -8,11 +8,11 @@ This blueprint is intentionally generic. It does not try to normalize brand-spec
 - custom actions for discharge and/or charge
 - both at the same time if a battery needs a direct setpoint plus extra brand-specific steps
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicolinuxfr%2Fsolar-battery-blueprint%2Fgh-pages%2Fen%2Funiversal_home_battery_power_manager.yaml)
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicolinuxfr%2Fhome-battery-blueprint%2Fgh-pages%2Fen%2Funiversal_home_battery_power_manager.yaml)
 
 Raw import URL:
 
-`https://raw.githubusercontent.com/nicolinuxfr/solar-battery-blueprint/gh-pages/en/universal_home_battery_power_manager.yaml`
+`https://raw.githubusercontent.com/nicolinuxfr/home-battery-blueprint/gh-pages/en/universal_home_battery_power_manager.yaml`
 
 ## Configuration
 
@@ -44,4 +44,4 @@ For each battery slot:
 - A single bidirectional direct command entity is not supported as a direct field pair. Use custom actions for that case.
 - For action-only batteries, stop actions should be idempotent because the blueprint may need to repeat them for safety.
 - The optional actual power sensor works best when it is signed: positive for discharge, negative for charge.
-- The blueprint metadata and documentation point to `nicolinuxfr/solar-battery-blueprint`.
+- The blueprint metadata and documentation point to `nicolinuxfr/home-battery-blueprint`.
