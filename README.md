@@ -1,12 +1,12 @@
 # home-battery-blueprint
 
-Localized Home Assistant blueprint project for steering up to four batteries from a single house power sensor. The blueprint focuses on discharge, can absorb real export through opportunistic charging, and drives each battery only through custom actions. Each battery is grouped in its own collapsed section by default to keep the form compact.
+Localized Home Assistant blueprint project for steering up to four batteries from a single house power sensor. The blueprint focuses on discharge, can absorb real export through opportunistic charging, and writes a signed power target for each battery into a numeric entity. Optional custom actions remain available for integrations that also need a separate mode or service call. Each battery is grouped in its own collapsed section by default to keep the form compact.
 
 This blueprint is intentionally generic. It does not try to normalize brand-specific APIs. Instead, each enabled battery slot is driven by:
 
-- custom actions for discharge and/or charge
-- optional stop actions to force a return to neutral when the operating mode changes or the blueprint is blocked
-- helper entities or vendor services hidden behind those actions when an integration needs an intermediate control surface
+- a signed numeric target entity updated by the blueprint
+- optional custom actions for charge and/or discharge when an integration needs a separate mode switch
+- either a signed helper or a direct device entity, depending on what the integration actually accepts
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicolinuxfr%2Fhome-battery-blueprint%2Fgh-pages%2Fen%2Fhome_battery_manager.yaml)
 
@@ -21,20 +21,19 @@ Raw import URL:
 
 For each battery slot:
 
-- `State of charge sensor`: leaving it empty disables the slot. The selector only shows battery sensors that report a percentage. If you fill it, the slot must also expose at least one usable direction: a non-zero maximum power plus the matching `Set` action.
+- `State of charge sensor`: leaving it empty disables the slot. The selector only shows battery sensors that report a percentage. If you fill it, the slot must also expose a numeric target entity and at least one non-zero power limit.
 - `Maximum discharge power` and `Maximum charge power`: manual limits used by the allocator.
 - `Priority on discharge`: prioritized batteries discharge first; opportunistic charging prefers non-priority batteries first.
-- `Command cooldown`: per-battery anti-spam delay for `set` actions only. Set it to `0` to disable it.
-- `Set discharge actions` and `Set charge actions`: required for any enabled direction with a non-zero max power. They receive runtime variables such as `battery_slot`, `battery_soc`, `target_discharge_w`, `target_charge_w`, `house_power_w` and `export_surplus_w`.
-- `Stop discharge actions` and `Stop charge actions`: optional neutralization hooks. They are strongly recommended for action-only batteries so the blueprint can force a safe return to neutral.
+- `Target power entity`: the `number` or `input_number` entity written by the blueprint. The target is signed: positive for discharge, negative for charge, `0` for stop. If charging is enabled, the selected entity must accept negative values.
+- `Command cooldown`: per-battery anti-spam delay for active target updates. Set it to `0` to disable it. Writing `0` and flipping the sign still happen immediately so the blueprint can stop or reverse a battery without waiting.
+- `Discharge actions` and `Charge actions`: optional hooks executed on every active update in the matching direction. They receive runtime variables such as `battery_slot`, `battery_soc`, `target_power_w`, `target_discharge_w`, `target_charge_w`, `house_power_w` and `export_surplus_w`.
 
 Zendure example:
 
 - create a signed helper such as `input_number.zendure_virtual_p1`
 - point the Zendure integration `p1meter` option to that helper
-- in `Set discharge actions`, write the positive `target_discharge_w` into the helper
-- in `Set charge actions`, write the negative `target_charge_w` into the helper
-- in both stop actions, write `0`
+- set that helper as the `Target power entity`
+- leave `Discharge actions` and `Charge actions` empty if the Zendure integration already consumes that helper directly
 
 ## How It Works
 
@@ -42,13 +41,13 @@ Zendure example:
 - During discharge it allocates `max(house_power, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
 - During opportunistic charging it looks for real export, requires at least one battery at `99%` or above, and then fills charge-capable batteries from the lowest state of charge upward, avoiding discharge-priority batteries until needed.
 - A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
-- Safety comes first: entering charge stops every managed discharge path first, and entering discharge stops every managed charge path first. The blueprint never intentionally charges and discharges managed batteries at the same time.
-- Stop actions exist to force a neutral state when the mode changes, when a blocking entity becomes active, or when the house power sensor becomes invalid. This prevents an action-based integration from keeping a stale previous command alive.
-- If an enabled slot is incomplete, the automation now stops with an explicit validation error that tells you whether actions are missing, both power limits are `0 W`, or the configured actions and power limits do not match.
-- The cooldown only throttles `set` actions. `stop` actions ignore it on purpose, so a battery can always be forced back to neutral immediately.
+- The target written by the blueprint is signed: positive for discharge, negative for charge, `0` for neutral. Writing `0`, reacting to an invalid sensor, honoring a blocking entity, or flipping the sign all happen immediately without waiting for the cooldown.
+- Optional charge and discharge actions only run while the battery is active in the matching direction. They are useful for integrations that still need a `select`, an auxiliary service call, or a helper-to-vendor translation layer.
+- If an enabled slot is incomplete, the automation stops with an explicit validation error that tells you whether the target entity is missing or both power limits are `0 W`.
 
 ## Known Limitations
 
 - The blueprint does not create a moving-average helper. If you want a smoothed house signal, provide an already filtered sensor as input.
-- For action-only batteries, stop actions should be idempotent because the blueprint may need to repeat them for safety.
+- If a battery should charge, the chosen target entity must accept negative values. Otherwise, use an intermediate signed helper.
+- Optional actions do not run in neutral. If your integration needs an explicit translation of `0`, use a signed helper that the integration or another automation consumes.
 - The blueprint metadata and documentation point to `nicolinuxfr/home-battery-blueprint`.

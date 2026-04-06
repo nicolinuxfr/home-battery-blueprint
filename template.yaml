@@ -28,7 +28,8 @@ blueprint:
             - domain: binary_sensor
             - domain: input_boolean
 
-    # Each battery slot is controlled through custom actions only.
+    # Each battery slot is driven through a signed numeric target entity.
+    # Optional active-mode actions can translate that target to vendor-specific controls.
     # Generated SoC selectors are limited to battery percentage sensors.
     [[generated.slot_inputs]]
 
@@ -61,8 +62,8 @@ variables:
 
   [[generated.slot_state_vars]]
 
-  # Generated validation catches missing set actions, zero power limits,
-  # and partial per-slot setups before any custom action is executed.
+  # Generated validation catches missing target entities and zero power limits
+  # before any target update or custom action is executed.
   validation_errors_json: >-
     {% set ns = namespace(errors=[]) %}
     [[generated.slot_validation_lines]]
@@ -172,6 +173,10 @@ variables:
   [[generated.command_vars]]
 
 actions:
+  # Generated slot actions keep the signed target entity updated and
+  # optionally run active-mode custom actions for charge/discharge integrations.
+  [[generated.slot_actions]]
+
   - choose:
       - conditions:
           - condition: template
@@ -181,13 +186,9 @@ actions:
               [[message.invalid_config_prefix]]
               {{ validation_errors | join(' | ') }}
 
-  - choose:
       - conditions:
           - condition: template
             value_template: "{{ operating_mode == 'invalid_sensor' }}"
         sequence:
           - stop: >-
               [[message.invalid_sensor]]
-
-  # Generated slot actions run custom set/stop actions only.
-  [[generated.slot_actions]]

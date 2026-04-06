@@ -65,27 +65,24 @@ battery___SLOT___section:
           step: 5
           unit_of_measurement: s
           mode: slider
-    battery___SLOT___set_discharge_actions:
-      name: "[[input.battery.set_discharge_actions.name]]"
-      description: "[[input.battery.set_discharge_actions.description]]"
+    battery___SLOT___target_power_entity:
+      name: "[[input.battery.target_power_entity.name]]"
+      description: "[[input.battery.target_power_entity.description]]"
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: number
+            - domain: input_number
+    battery___SLOT___discharge_actions:
+      name: "[[input.battery.discharge_actions.name]]"
+      description: "[[input.battery.discharge_actions.description]]"
       default: []
       selector:
         action: {}
-    battery___SLOT___stop_discharge_actions:
-      name: "[[input.battery.stop_discharge_actions.name]]"
-      description: "[[input.battery.stop_discharge_actions.description]]"
-      default: []
-      selector:
-        action: {}
-    battery___SLOT___set_charge_actions:
-      name: "[[input.battery.set_charge_actions.name]]"
-      description: "[[input.battery.set_charge_actions.description]]"
-      default: []
-      selector:
-        action: {}
-    battery___SLOT___stop_charge_actions:
-      name: "[[input.battery.stop_charge_actions.name]]"
-      description: "[[input.battery.stop_charge_actions.description]]"
+    battery___SLOT___charge_actions:
+      name: "[[input.battery.charge_actions.name]]"
+      description: "[[input.battery.charge_actions.description]]"
       default: []
       selector:
         action: {}
@@ -98,10 +95,9 @@ battery___SLOT___max_discharge_w: !input battery___SLOT___max_discharge_w
 battery___SLOT___max_charge_w: !input battery___SLOT___max_charge_w
 battery___SLOT___priority_discharge: !input battery___SLOT___priority_discharge
 battery___SLOT___cooldown_seconds: !input battery___SLOT___cooldown_seconds
-battery___SLOT___set_discharge_actions: !input battery___SLOT___set_discharge_actions
-battery___SLOT___stop_discharge_actions: !input battery___SLOT___stop_discharge_actions
-battery___SLOT___set_charge_actions: !input battery___SLOT___set_charge_actions
-battery___SLOT___stop_charge_actions: !input battery___SLOT___stop_charge_actions
+battery___SLOT___target_power_entity: !input battery___SLOT___target_power_entity
+battery___SLOT___discharge_actions: !input battery___SLOT___discharge_actions
+battery___SLOT___charge_actions: !input battery___SLOT___charge_actions
 """.strip()
 
 
@@ -109,34 +105,47 @@ SLOT_STATE_TEMPLATE = """
 slot___SLOT___used: "{{ battery___SLOT___soc_sensor != '' }}"
 slot___SLOT___soc: "{{ states(battery___SLOT___soc_sensor) | float(0) if slot___SLOT___used else 0 }}"
 slot___SLOT___actual_power: "0"
-slot___SLOT___has_discharge_actions: "{{ battery___SLOT___set_discharge_actions | count > 0 }}"
-slot___SLOT___has_stop_discharge_actions: "{{ battery___SLOT___stop_discharge_actions | count > 0 }}"
-slot___SLOT___has_charge_actions: "{{ battery___SLOT___set_charge_actions | count > 0 }}"
-slot___SLOT___has_stop_charge_actions: "{{ battery___SLOT___stop_charge_actions | count > 0 }}"
-slot___SLOT___can_discharge: "{{ slot___SLOT___used and battery___SLOT___max_discharge_w | float(0) > 0 and slot___SLOT___has_discharge_actions }}"
-slot___SLOT___can_charge: "{{ slot___SLOT___used and battery___SLOT___max_charge_w | float(0) > 0 and slot___SLOT___has_charge_actions }}"
+slot___SLOT___target_entity_configured: "{{ battery___SLOT___target_power_entity != '' }}"
+slot___SLOT___target_power_state: >-
+  {% if slot___SLOT___target_entity_configured %}
+    {{ states(battery___SLOT___target_power_entity) }}
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___current_target_w: >-
+  {% if slot___SLOT___target_power_state in ['unknown', 'unavailable', 'none', ''] %}
+    0
+  {% else %}
+    {{ slot___SLOT___target_power_state | float(0) }}
+  {% endif %}
+slot___SLOT___current_target_sign: >-
+  {% if slot___SLOT___current_target_w | float(0) > 0 %}
+    1
+  {% elif slot___SLOT___current_target_w | float(0) < 0 %}
+    -1
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___has_discharge_actions: "{{ battery___SLOT___discharge_actions | count > 0 }}"
+slot___SLOT___has_charge_actions: "{{ battery___SLOT___charge_actions | count > 0 }}"
+slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 }}"
+slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 }}"
 """.strip()
 
 
 SLOT_VALIDATION_TEMPLATE = """
 {% if slot___SLOT___used %}
-  {% set has_discharge_actions = slot___SLOT___has_discharge_actions | bool %}
-  {% set has_charge_actions = slot___SLOT___has_charge_actions | bool %}
+  {% set has_target_entity = slot___SLOT___target_entity_configured | bool %}
   {% set discharge_power_enabled = battery___SLOT___max_discharge_w | float(0) > 0 %}
   {% set charge_power_enabled = battery___SLOT___max_charge_w | float(0) > 0 %}
-  {% if not (has_discharge_actions or has_charge_actions) %}
+  {% if not has_target_entity %}
     {% set error_text -%}
-      [[slot.__SLOT__]] [[validation.no_actions.suffix]]
+      [[slot.__SLOT__]] [[validation.no_target_entity.suffix]]
     {%- endset %}
     {% set ns.errors = ns.errors + [error_text | trim] %}
   {% elif not (discharge_power_enabled or charge_power_enabled) %}
     {% set error_text -%}
       [[slot.__SLOT__]] [[validation.no_power.suffix]]
-    {%- endset %}
-    {% set ns.errors = ns.errors + [error_text | trim] %}
-  {% elif not ((discharge_power_enabled and has_discharge_actions) or (charge_power_enabled and has_charge_actions)) %}
-    {% set error_text -%}
-      [[slot.__SLOT__]] [[validation.no_matching_interface.suffix]]
     {%- endset %}
     {% set ns.errors = ns.errors + [error_text | trim] %}
   {% endif %}
@@ -174,10 +183,50 @@ charge_cooldown_ok___SLOT__: >-
 SLOT_COMMAND_TEMPLATE = """
 discharge_active___SLOT__: "{{ operating_mode == 'discharge' and discharge_target___SLOT__ >= command_deadband_w }}"
 charge_active___SLOT__: "{{ operating_mode == 'charge' and charge_target___SLOT__ >= command_deadband_w }}"
-should_run_discharge_actions___SLOT__: "{{ slot___SLOT___has_discharge_actions and discharge_active___SLOT__ and discharge_cooldown_ok___SLOT__ }}"
-should_run_charge_actions___SLOT__: "{{ slot___SLOT___has_charge_actions and charge_active___SLOT__ and charge_cooldown_ok___SLOT__ }}"
-should_stop_discharge_actions___SLOT__: "{{ slot___SLOT___has_stop_discharge_actions and not discharge_active___SLOT__ }}"
-should_stop_charge_actions___SLOT__: "{{ slot___SLOT___has_stop_charge_actions and not charge_active___SLOT__ }}"
+signed_target___SLOT__: >-
+  {% if discharge_active___SLOT__ %}
+    {{ discharge_target___SLOT__ | float(0) }}
+  {% elif charge_active___SLOT__ %}
+    {{ 0 - (charge_target___SLOT__ | float(0)) }}
+  {% else %}
+    0
+  {% endif %}
+desired_target_sign___SLOT__: >-
+  {% if signed_target___SLOT__ | float(0) > 0 %}
+    1
+  {% elif signed_target___SLOT__ | float(0) < 0 %}
+    -1
+  {% else %}
+    0
+  {% endif %}
+should_write_target_power___SLOT__: >-
+  {% if not slot___SLOT___target_entity_configured %}
+    false
+  {% elif desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0) %}
+    true
+  {% elif signed_target___SLOT__ | float(0) > 0 %}
+    {{ discharge_cooldown_ok___SLOT__ }}
+  {% elif signed_target___SLOT__ | float(0) < 0 %}
+    {{ charge_cooldown_ok___SLOT__ }}
+  {% else %}
+    false
+  {% endif %}
+should_run_discharge_actions___SLOT__: >-
+  {% if not slot___SLOT___has_discharge_actions or signed_target___SLOT__ | float(0) <= 0 %}
+    false
+  {% elif slot___SLOT___current_target_sign | int(0) != 1 %}
+    true
+  {% else %}
+    {{ discharge_cooldown_ok___SLOT__ }}
+  {% endif %}
+should_run_charge_actions___SLOT__: >-
+  {% if not slot___SLOT___has_charge_actions or signed_target___SLOT__ | float(0) >= 0 %}
+    false
+  {% elif slot___SLOT___current_target_sign | int(0) != -1 %}
+    true
+  {% else %}
+    {{ charge_cooldown_ok___SLOT__ }}
+  {% endif %}
 """.strip()
 
 
@@ -185,7 +234,7 @@ SLOT_ACTION_TEMPLATE = """
 - choose:
     - conditions:
         - condition: template
-          value_template: "{{ should_stop_discharge_actions___SLOT__ }}"
+          value_template: "{{ should_write_target_power___SLOT__ }}"
       sequence:
         - variables:
             battery_slot: __SLOT__
@@ -194,26 +243,28 @@ SLOT_ACTION_TEMPLATE = """
             house_power_w: "{{ house_power_w }}"
             import_need_w: "{{ import_need_w }}"
             export_surplus_w: "{{ export_surplus_w }}"
-            target_discharge_w: 0
-            target_charge_w: "{{ charge_target___SLOT__ }}"
-        - choose: []
-          default: !input battery___SLOT___stop_discharge_actions
-- choose:
-    - conditions:
-        - condition: template
-          value_template: "{{ should_stop_charge_actions___SLOT__ }}"
-      sequence:
-        - variables:
-            battery_slot: __SLOT__
-            battery_soc: "{{ slot___SLOT___soc }}"
-            battery_actual_power_w: "{{ slot___SLOT___actual_power }}"
-            house_power_w: "{{ house_power_w }}"
-            import_need_w: "{{ import_need_w }}"
-            export_surplus_w: "{{ export_surplus_w }}"
+            target_power_w: "{{ signed_target___SLOT__ }}"
             target_discharge_w: "{{ discharge_target___SLOT__ }}"
-            target_charge_w: 0
-        - choose: []
-          default: !input battery___SLOT___stop_charge_actions
+            target_charge_w: "{{ charge_target___SLOT__ }}"
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ battery___SLOT___target_power_entity.startswith('number.') }}"
+              sequence:
+                - action: number.set_value
+                  target:
+                    entity_id: !input battery___SLOT___target_power_entity
+                  data:
+                    value: "{{ target_power_w | round(0) | int(0) }}"
+            - conditions:
+                - condition: template
+                  value_template: "{{ battery___SLOT___target_power_entity.startswith('input_number.') }}"
+              sequence:
+                - action: input_number.set_value
+                  target:
+                    entity_id: !input battery___SLOT___target_power_entity
+                  data:
+                    value: "{{ target_power_w | round(0) | int(0) }}"
 - choose:
     - conditions:
         - condition: template
@@ -226,10 +277,11 @@ SLOT_ACTION_TEMPLATE = """
             house_power_w: "{{ house_power_w }}"
             import_need_w: "{{ import_need_w }}"
             export_surplus_w: "{{ export_surplus_w }}"
+            target_power_w: "{{ signed_target___SLOT__ }}"
             target_discharge_w: "{{ discharge_target___SLOT__ }}"
-            target_charge_w: 0
+            target_charge_w: "{{ charge_target___SLOT__ }}"
         - choose: []
-          default: !input battery___SLOT___set_discharge_actions
+          default: !input battery___SLOT___discharge_actions
 - choose:
     - conditions:
         - condition: template
@@ -242,10 +294,11 @@ SLOT_ACTION_TEMPLATE = """
             house_power_w: "{{ house_power_w }}"
             import_need_w: "{{ import_need_w }}"
             export_surplus_w: "{{ export_surplus_w }}"
-            target_discharge_w: 0
+            target_power_w: "{{ signed_target___SLOT__ }}"
+            target_discharge_w: "{{ discharge_target___SLOT__ }}"
             target_charge_w: "{{ charge_target___SLOT__ }}"
         - choose: []
-          default: !input battery___SLOT___set_charge_actions
+          default: !input battery___SLOT___charge_actions
 """.strip()
 
 
