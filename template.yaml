@@ -54,6 +54,19 @@ variables:
   gate_blocked: >-
     {% set blockers = expand(blocking_entities) %}
     {{ blockers | selectattr('state', 'ne', 'off') | list | count > 0 }}
+  trigger_entity_id: >-
+    {% if trigger is defined and trigger.platform == 'state' and trigger.entity_id is defined %}
+      {{ trigger.entity_id }}
+    {% else %}
+      
+    {% endif %}
+  triggered_by_blocking_entity: "{{ trigger_entity_id in blocking_entities }}"
+  blocking_trigger_entered_blocked: >-
+    {% if triggered_by_blocking_entity and trigger is defined and trigger.to_state is not none %}
+      {{ trigger.to_state.state != 'off' }}
+    {% else %}
+      false
+    {% endif %}
   house_power_state: "{{ states(house_power_sensor) }}"
   house_power_valid: "{{ house_power_state not in ['unknown', 'unavailable', 'none', ''] }}"
   house_power_w: "{{ house_power_state | float(0) }}"

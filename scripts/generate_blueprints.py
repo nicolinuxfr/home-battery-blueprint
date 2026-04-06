@@ -202,6 +202,10 @@ desired_target_sign___SLOT__: >-
 should_write_target_power___SLOT__: >-
   {% if not slot___SLOT___target_entity_configured %}
     false
+  {% elif operating_mode == 'blocked' %}
+    {{ desired_target_sign___SLOT__ | int(0) == 0
+       and desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0)
+       and blocking_trigger_entered_blocked }}
   {% elif desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0) %}
     true
   {% elif signed_target___SLOT__ | float(0) > 0 %}
@@ -243,7 +247,8 @@ SLOT_ACTION_TEMPLATE = """
             {% set blockers_clear = blockers | selectattr('state', 'eq', 'off') | list | count == blockers | count %}
             {% set sensor_state = states(house_power_sensor) %}
             {% set sensor_valid = sensor_state not in ['unknown', 'unavailable', 'none', ''] %}
-            {{ signed_target___SLOT__ | float(0) == 0 or (blockers_clear and sensor_valid) }}
+            {% set zero_allowed = signed_target___SLOT__ | float(0) == 0 and (operating_mode != 'blocked' or blocking_trigger_entered_blocked) %}
+            {{ zero_allowed or (blockers_clear and sensor_valid) }}
       sequence:
         - alias: "[[slot.__SLOT__]]: [[trace.prepare_target_context_suffix]]"
           variables:

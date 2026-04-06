@@ -32,7 +32,7 @@
   "input.house_power_sensor.name": "Capteur de puissance maison",
   "input.house_power_sensor.description": "Capteur principal de puissance maison. Ce sélecteur n'affiche que les capteurs de puissance. Utilise un capteur signé en watts avec des valeurs positives en import et négatives en export.",
   "input.blocking_entities.name": "Entités de blocage",
-  "input.blocking_entities.description": "Entités optionnelles qui doivent toutes rester à off pour que le blueprint tourne. Si une entité sélectionnée est à on, unknown ou unavailable, le blueprint remet toutes les batteries gérées à neutre, arrête toutes les actions personnalisées de charge et de décharge, puis revalide encore ce garde-fou juste avant toute commande non nulle.",
+  "input.blocking_entities.description": "Entités optionnelles qui doivent toutes rester à off pour que le blueprint tourne. Si une entité sélectionnée passe à on, unknown ou unavailable, le blueprint peut remettre toutes les batteries gérées à neutre uniquement sur ce changement d'état, puis il arrête toutes les actions personnalisées de charge et de décharge et ignore les runs bloqués suivants tant que tous les bloqueurs ne sont pas revenus à off.",
   "input.battery.soc_sensor.name": "Capteur d'état de charge",
   "input.battery.soc_sensor.description": "Laisse ce champ vide pour ignorer ce slot. Sinon, ce sélecteur n'affiche que les capteurs de batterie qui remontent un pourcentage de charge, et le capteur choisi active le slot. Un slot activé doit aussi exposer une entité numérique de consigne et au moins une limite de puissance non nulle.",
   "input.battery.max_discharge_w.name": "Puissance maximale de décharge",
