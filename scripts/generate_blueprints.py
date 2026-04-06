@@ -257,9 +257,8 @@ SLOT_ACTION_TEMPLATE = """
               sequence:
                 - alias: "[[slot.__SLOT__]]: [[trace.write_number_target_suffix]]"
                   action: number.set_value
-                  target:
-                    entity_id: !input battery___SLOT___target_power_entity
                   data:
+                    entity_id: "{{ battery___SLOT___target_power_entity }}"
                     value: "{{ target_power_w | round(0) | int(0) }}"
             - conditions:
                 - condition: template
@@ -267,9 +266,8 @@ SLOT_ACTION_TEMPLATE = """
               sequence:
                 - alias: "[[slot.__SLOT__]]: [[trace.write_input_number_target_suffix]]"
                   action: input_number.set_value
-                  target:
-                    entity_id: !input battery___SLOT___target_power_entity
                   data:
+                    entity_id: "{{ battery___SLOT___target_power_entity }}"
                     value: "{{ target_power_w | round(0) | int(0) }}"
 - alias: "[[slot.__SLOT__]]: [[trace.run_discharge_actions_suffix]]"
   choose:
