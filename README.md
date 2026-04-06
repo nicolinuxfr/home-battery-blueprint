@@ -16,7 +16,7 @@ Raw import URL:
 
 ## Configuration
 
-- `House power sensor`: the main sensor used by the allocator. It must use `import > 0` and `export < 0`.
+- `House power sensor`: the main sensor used by the allocator. The selector only shows power sensors, but Home Assistant cannot filter the unit here, so you should still pick a signed sensor in `W` with `import > 0` and `export < 0`.
 - `Blocking entities`: optional list of `binary_sensor` or `input_boolean` entities. The blueprint runs only if every selected entity is `off`. If one becomes `on`, `unknown`, or `unavailable`, all managed batteries are returned to neutral and all stop actions are executed.
 
 For each battery slot:

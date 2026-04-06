@@ -14,7 +14,9 @@ blueprint:
       description: "[[input.house_power_sensor.description]]"
       selector:
         entity:
-          domain: sensor
+          filter:
+            - domain: sensor
+              device_class: power
     blocking_entities:
       name: "[[input.blocking_entities.name]]"
       description: "[[input.blocking_entities.description]]"

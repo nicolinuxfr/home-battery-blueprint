@@ -16,7 +16,7 @@ URL brute d'import :
 
 ## Configuration
 
-- `Capteur de puissance maison` : capteur principal utilisé par l'algorithme. Il doit suivre la convention `import > 0` et `export < 0`.
+- `Capteur de puissance maison` : capteur principal utilisé par l'algorithme. Le sélecteur n'affiche que les capteurs de puissance, mais Home Assistant ne permet pas de filtrer l'unité ici, donc il faut toujours choisir un capteur signé en `W` avec `import > 0` et `export < 0`.
 - `Entités de blocage` : liste optionnelle d'entités `binary_sensor` ou `input_boolean`. Le blueprint tourne seulement si toutes les entités sélectionnées sont à `off`. Si l'une passe à `on`, `unknown` ou `unavailable`, toutes les batteries gérées reviennent à neutre et toutes les actions d'arrêt sont exécutées.
 
 Pour chaque slot batterie :

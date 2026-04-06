@@ -12,7 +12,7 @@
   "slot.3": "Battery 3",
   "slot.4": "Battery 4",
   "input.house_power_sensor.name": "House power sensor",
-  "input.house_power_sensor.description": "Main house power sensor. The blueprint expects positive values for import and negative values for export.",
+  "input.house_power_sensor.description": "Main house power sensor. This selector only shows power sensors. Use a signed sensor in watts with positive values for import and negative values for export.",
   "input.blocking_entities.name": "Blocking entities",
   "input.blocking_entities.description": "Optional entities that must all stay off for the blueprint to run. If any selected entity is on, unknown, or unavailable, the blueprint forces every managed battery back to neutral and stops all custom charge and discharge actions.",
   "input.battery.soc_sensor.name": "State of charge sensor",
