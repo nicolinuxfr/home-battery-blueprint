@@ -1,0 +1,59 @@
+name: Blueprint i18n
+
+on:
+  pull_request:
+    paths:
+      - template.yaml
+      - languages/**/*.json
+      - scripts/generate_blueprints.py
+      - VERSION
+  push:
+    branches:
+      - main
+    paths:
+      - template.yaml
+      - languages/**/*.json
+      - scripts/generate_blueprints.py
+      - VERSION
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate template and dictionaries
+        run: python scripts/generate_blueprints.py --filename universal_home_battery_power_manager.yaml
+
+  publish-gh-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate-and-generate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate localized blueprints
+        run: python scripts/generate_blueprints.py --filename universal_home_battery_power_manager.yaml
+
+      - name: Publish dist to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          force_orphan: true
+          exclude_assets: .DS_Store

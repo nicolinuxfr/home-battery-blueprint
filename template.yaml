@@ -1,0 +1,203 @@
+blueprint:
+  name: "[[blueprint.name]] ([[blueprint.version]])"
+  description: |-
+    [[blueprint.description]]
+
+    [[blueprint.version.line]] - [Changelog](https://github.com/nicolinuxfr/solar-battery-blueprint/blob/main/CHANGELOG.md#[[blueprint.version.nodots]])
+  domain: automation
+  source_url: https://github.com/nicolinuxfr/solar-battery-blueprint
+  input:
+    house_power_sensor:
+      name: "[[input.house_power_sensor.name]]"
+      description: "[[input.house_power_sensor.description]]"
+      selector:
+        entity:
+          domain: sensor
+    margin_w:
+      name: "[[input.margin_w.name]]"
+      description: "[[input.margin_w.description]]"
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 500
+          step: 5
+          unit_of_measurement: W
+          mode: slider
+    control_gate_entity:
+      name: "[[input.control_gate_entity.name]]"
+      description: "[[input.control_gate_entity.description]]"
+      selector:
+        entity:
+          domain:
+            - binary_sensor
+            - input_boolean
+    min_command_delta_w:
+      name: "[[input.min_command_delta_w.name]]"
+      description: "[[input.min_command_delta_w.description]]"
+      default: 50
+      selector:
+        number:
+          min: 5
+          max: 500
+          step: 5
+          unit_of_measurement: W
+          mode: slider
+
+    [[generated.slot_inputs]]
+
+mode: restart
+
+triggers:
+  - trigger: state
+    entity_id: !input house_power_sensor
+  - trigger: state
+    entity_id: !input control_gate_entity
+
+variables:
+  house_power_sensor: !input house_power_sensor
+  control_gate_entity: !input control_gate_entity
+  margin_w: !input margin_w
+  min_command_delta_w: !input min_command_delta_w
+
+  [[generated.slot_bindings]]
+
+  automation_last_triggered_ts: >-
+    {% set last = this.attributes.last_triggered %}
+    {{ as_timestamp(last, 0) if last is not none else 0 }}
+  gate_blocked: "{{ states(control_gate_entity) in ['off', 'unknown', 'unavailable'] }}"
+  house_power_state: "{{ states(house_power_sensor) }}"
+  house_power_valid: "{{ house_power_state not in ['unknown', 'unavailable', 'none', ''] }}"
+  house_power_w: "{{ house_power_state | float(0) }}"
+  import_need_w: "{{ [house_power_w - margin_w, 0] | max if house_power_valid else 0 }}"
+  export_surplus_w: "{{ [0 - house_power_w, 0] | max if house_power_valid else 0 }}"
+
+  [[generated.slot_state_vars]]
+
+  validation_errors_json: >-
+    {% set ns = namespace(errors=[]) %}
+    [[generated.slot_validation_lines]]
+    {{ ns.errors | to_json }}
+  validation_errors: "{{ validation_errors_json | from_json }}"
+
+  batteries_json: >-
+    {% set ns = namespace(items=[]) %}
+    [[generated.batteries_json_lines]]
+    {{ ns.items | to_json }}
+  batteries: "{{ batteries_json | from_json }}"
+  [[generated.count_vars]]
+
+  operating_mode: >-
+    {% if gate_blocked %}
+      blocked
+    {% elif validation_errors | count > 0 %}
+      invalid_config
+    {% elif not house_power_valid %}
+      invalid_sensor
+    {% elif import_need_w >= min_command_delta_w and discharge_capable_count > 0 %}
+      discharge
+    {% elif export_surplus_w >= min_command_delta_w and near_full_exists and charge_capable_count > 0 %}
+      charge
+    {% else %}
+      neutral
+    {% endif %}
+
+  discharge_order_json: >-
+    {% set ns = namespace(priority=[], regular=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_discharge %}
+        {% if battery.priority %}
+          {% set ns.priority = ns.priority + [battery] %}
+        {% else %}
+          {% set ns.regular = ns.regular + [battery] %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ ((ns.priority | sort(attribute='soc', reverse=true)) + (ns.regular | sort(attribute='soc', reverse=true))) | to_json }}
+  charge_order_json: >-
+    {% set ns = namespace(non_priority=[], priority=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_charge %}
+        {% if battery.priority %}
+          {% set ns.priority = ns.priority + [battery] %}
+        {% else %}
+          {% set ns.non_priority = ns.non_priority + [battery] %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ ((ns.non_priority | sort(attribute='soc')) + (ns.priority | sort(attribute='soc'))) | to_json }}
+
+  discharge_targets_json: >-
+    {% set batteries = discharge_order_json | from_json %}
+    {% set ns = namespace(remaining=import_need_w | float(0), t1=0, t2=0, t3=0, t4=0) %}
+    {% if operating_mode == 'discharge' %}
+      {% for battery in batteries %}
+        {% set allocation = [battery.max_discharge, ns.remaining] | min %}
+        {% set allocation = [allocation, 0] | max %}
+        {% if battery.slot == 1 %}
+          {% set ns.t1 = allocation | round(0) %}
+        {% elif battery.slot == 2 %}
+          {% set ns.t2 = allocation | round(0) %}
+        {% elif battery.slot == 3 %}
+          {% set ns.t3 = allocation | round(0) %}
+        {% elif battery.slot == 4 %}
+          {% set ns.t4 = allocation | round(0) %}
+        {% endif %}
+        {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+      {% endfor %}
+    {% endif %}
+    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} | to_json }}
+  charge_targets_json: >-
+    {% set batteries = charge_order_json | from_json %}
+    {% set ns = namespace(remaining=export_surplus_w | float(0), t1=0, t2=0, t3=0, t4=0) %}
+    {% if operating_mode == 'charge' %}
+      {% for battery in batteries %}
+        {% set allocation = [battery.max_charge, ns.remaining] | min %}
+        {% set allocation = [allocation, 0] | max %}
+        {% if battery.slot == 1 %}
+          {% set ns.t1 = allocation | round(0) %}
+        {% elif battery.slot == 2 %}
+          {% set ns.t2 = allocation | round(0) %}
+        {% elif battery.slot == 3 %}
+          {% set ns.t3 = allocation | round(0) %}
+        {% elif battery.slot == 4 %}
+          {% set ns.t4 = allocation | round(0) %}
+        {% endif %}
+        {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+      {% endfor %}
+    {% endif %}
+    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} | to_json }}
+
+  discharge_target_1: "{{ (discharge_targets_json | from_json)['1'] | float(0) }}"
+  discharge_target_2: "{{ (discharge_targets_json | from_json)['2'] | float(0) }}"
+  discharge_target_3: "{{ (discharge_targets_json | from_json)['3'] | float(0) }}"
+  discharge_target_4: "{{ (discharge_targets_json | from_json)['4'] | float(0) }}"
+
+  charge_target_1: "{{ (charge_targets_json | from_json)['1'] | float(0) }}"
+  charge_target_2: "{{ (charge_targets_json | from_json)['2'] | float(0) }}"
+  charge_target_3: "{{ (charge_targets_json | from_json)['3'] | float(0) }}"
+  charge_target_4: "{{ (charge_targets_json | from_json)['4'] | float(0) }}"
+
+  [[generated.cooldown_vars]]
+
+  [[generated.command_vars]]
+
+actions:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ validation_errors | count > 0 }}"
+        sequence:
+          - stop: >-
+              Invalid battery blueprint configuration:
+              {{ validation_errors | join(' | ') }}
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ operating_mode == 'invalid_sensor' }}"
+        sequence:
+          - stop: >-
+              House power sensor {{ house_power_sensor }} is unavailable or not numeric.
+
+  [[generated.slot_actions]]
