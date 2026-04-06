@@ -117,8 +117,27 @@ slot___SLOT___can_charge: "{{ slot___SLOT___used and battery___SLOT___max_charge
 
 
 SLOT_VALIDATION_TEMPLATE = """
-{% if slot___SLOT___used and not (slot___SLOT___can_discharge or slot___SLOT___can_charge) %}
-  {% set ns.errors = ns.errors + ['[[slot.__SLOT__]] [[validation.no_interface.suffix]]'] %}
+{% if slot___SLOT___used %}
+  {% set has_discharge_actions = slot___SLOT___has_discharge_actions | bool %}
+  {% set has_charge_actions = slot___SLOT___has_charge_actions | bool %}
+  {% set discharge_power_enabled = battery___SLOT___max_discharge_w | float(0) > 0 %}
+  {% set charge_power_enabled = battery___SLOT___max_charge_w | float(0) > 0 %}
+  {% if not (has_discharge_actions or has_charge_actions) %}
+    {% set error_text -%}
+      [[slot.__SLOT__]] [[validation.no_actions.suffix]]
+    {%- endset %}
+    {% set ns.errors = ns.errors + [error_text | trim] %}
+  {% elif not (discharge_power_enabled or charge_power_enabled) %}
+    {% set error_text -%}
+      [[slot.__SLOT__]] [[validation.no_power.suffix]]
+    {%- endset %}
+    {% set ns.errors = ns.errors + [error_text | trim] %}
+  {% elif not ((discharge_power_enabled and has_discharge_actions) or (charge_power_enabled and has_charge_actions)) %}
+    {% set error_text -%}
+      [[slot.__SLOT__]] [[validation.no_matching_interface.suffix]]
+    {%- endset %}
+    {% set ns.errors = ns.errors + [error_text | trim] %}
+  {% endif %}
 {% endif %}
 """.strip()
 

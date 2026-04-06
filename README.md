@@ -2,7 +2,7 @@
 
 Localized Home Assistant blueprint project for steering up to four batteries from a single house power sensor. The blueprint focuses on discharge, can absorb real export through opportunistic charging, and drives each battery only through custom actions. Each battery is grouped in its own collapsed section by default to keep the form compact.
 
-This blueprint is intentionally generic. It does not try to normalize brand-specific APIs. Instead, each battery slot is driven by:
+This blueprint is intentionally generic. It does not try to normalize brand-specific APIs. Instead, each enabled battery slot is driven by:
 
 - custom actions for discharge and/or charge
 - optional stop actions to force a return to neutral when the operating mode changes or the blueprint is blocked
@@ -21,11 +21,12 @@ Raw import URL:
 
 For each battery slot:
 
-- `State of charge sensor`: leaving it empty disables the slot.
+- `State of charge sensor`: leaving it empty disables the slot. If you fill it, the slot must also expose at least one usable direction: a non-zero maximum power plus the matching `Set` action.
 - `Maximum discharge power` and `Maximum charge power`: manual limits used by the allocator.
 - `Priority on discharge`: prioritized batteries discharge first; opportunistic charging prefers non-priority batteries first.
 - `Command cooldown`: per-battery anti-spam delay for `set` actions only. Set it to `0` to disable it.
-- `Set/Stop discharge actions` and `Set/Stop charge actions`: optional custom actions with runtime variables such as `battery_slot`, `battery_soc`, `target_discharge_w`, `target_charge_w`, `house_power_w` and `export_surplus_w`.
+- `Set discharge actions` and `Set charge actions`: required for any enabled direction with a non-zero max power. They receive runtime variables such as `battery_slot`, `battery_soc`, `target_discharge_w`, `target_charge_w`, `house_power_w` and `export_surplus_w`.
+- `Stop discharge actions` and `Stop charge actions`: optional neutralization hooks. They are strongly recommended for action-only batteries so the blueprint can force a safe return to neutral.
 
 Zendure example:
 
@@ -43,6 +44,7 @@ Zendure example:
 - A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
 - Safety comes first: entering charge stops every managed discharge path first, and entering discharge stops every managed charge path first. The blueprint never intentionally charges and discharges managed batteries at the same time.
 - Stop actions exist to force a neutral state when the mode changes, when a blocking entity becomes active, or when the house power sensor becomes invalid. This prevents an action-based integration from keeping a stale previous command alive.
+- If an enabled slot is incomplete, the automation now stops with an explicit validation error that tells you whether actions are missing, both power limits are `0 W`, or the configured actions and power limits do not match.
 - The cooldown only throttles `set` actions. `stop` actions ignore it on purpose, so a battery can always be forced back to neutral immediately.
 
 ## Known Limitations

@@ -58,6 +58,8 @@ variables:
 
   [[generated.slot_state_vars]]
 
+  # Generated validation catches missing set actions, zero power limits,
+  # and partial per-slot setups before any custom action is executed.
   validation_errors_json: >-
     {% set ns = namespace(errors=[]) %}
     [[generated.slot_validation_lines]]

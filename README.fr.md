@@ -2,7 +2,7 @@
 
 Projet de blueprint Home Assistant multilingue pour piloter jusqu'à quatre batteries à partir d'un seul capteur de puissance maison. Le blueprint se concentre sur la décharge, peut absorber un export réel via une charge opportuniste, et pilote chaque batterie uniquement via des actions personnalisées. Chaque batterie est rangée dans sa propre section repliée par défaut pour garder un formulaire compact.
 
-Ce blueprint est volontairement générique. Il n'essaie pas d'unifier les APIs propres à chaque marque. À la place, chaque slot batterie est piloté par :
+Ce blueprint est volontairement générique. Il n'essaie pas d'unifier les APIs propres à chaque marque. À la place, chaque slot batterie activé est piloté par :
 
 - des actions personnalisées pour la décharge et/ou la charge
 - des actions d'arrêt optionnelles pour forcer le retour à neutre quand le mode change ou que le blueprint est bloqué
@@ -21,11 +21,12 @@ URL brute d'import :
 
 Pour chaque slot batterie :
 
-- `Capteur d'état de charge` : laisser vide désactive le slot.
+- `Capteur d'état de charge` : laisser vide désactive le slot. Si tu le renseignes, le slot doit aussi exposer au moins une direction exploitable : une puissance maximale non nulle et l'action `set` correspondante.
 - `Puissance maximale de décharge` et `Puissance maximale de charge` : limites manuelles utilisées par l'algorithme.
 - `Prioritaire en décharge` : les batteries prioritaires se vident d'abord ; la charge opportuniste préfère d'abord les batteries non prioritaires.
 - `Cooldown de commande` : délai anti-spam par batterie pour les actions `set` uniquement. Mets `0` pour le désactiver.
-- `Actions de mise/arrêt de décharge` et `Actions de mise/arrêt de charge` : actions personnalisées optionnelles, avec des variables d'exécution comme `battery_slot`, `battery_soc`, `target_discharge_w`, `target_charge_w`, `house_power_w` et `export_surplus_w`.
+- `Actions de mise en décharge` et `Actions de mise en charge` : obligatoires pour toute direction activée avec une puissance max non nulle. Elles reçoivent des variables d'exécution comme `battery_slot`, `battery_soc`, `target_discharge_w`, `target_charge_w`, `house_power_w` et `export_surplus_w`.
+- `Actions d'arrêt de décharge` et `Actions d'arrêt de charge` : hooks optionnels de retour à neutre. Ils sont fortement recommandés pour les batteries pilotées uniquement par actions afin de forcer un état sûr.
 
 Exemple Zendure :
 
@@ -43,6 +44,7 @@ Exemple Zendure :
 - Une bande morte interne fixe de `50 W` filtre les très petits écarts et évite les écritures inutiles ou les actions répétées. Elle remplace les anciens réglages visibles `Marge de décharge` et `Delta minimal de commande`.
 - La sécurité passe avant tout : passer en charge coupe d'abord tous les chemins de décharge gérés, et passer en décharge coupe d'abord tous les chemins de charge gérés. Le blueprint ne cherche jamais à faire charger et décharger en même temps des batteries qu'il pilote lui-même.
 - Les actions d'arrêt servent à forcer un retour à neutre quand le mode change, quand une entité de blocage s'active, ou quand le capteur maison devient invalide. Cela évite qu'une intégration pilotée par actions conserve une ancienne consigne.
+- Si un slot activé est incomplet, l'automatisation s'arrête maintenant avec un message de validation explicite indiquant si des actions manquent, si les deux puissances sont à `0 W`, ou si les actions et les puissances configurées ne correspondent pas.
 - Le cooldown ne limite que les actions `set`. Les actions `stop` l'ignorent volontairement pour pouvoir forcer un retour à neutre immédiatement.
 
 ## Limites connues
