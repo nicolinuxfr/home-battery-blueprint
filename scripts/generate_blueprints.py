@@ -70,20 +70,6 @@ battery___SLOT___section:
           step: 5
           unit_of_measurement: s
           mode: slider
-    battery___SLOT___discharge_target_number:
-      name: "[[input.battery.discharge_target_number.name]]"
-      description: "[[input.battery.discharge_target_number.description]]"
-      default: ""
-      selector:
-        entity:
-          domain: number
-    battery___SLOT___charge_target_number:
-      name: "[[input.battery.charge_target_number.name]]"
-      description: "[[input.battery.charge_target_number.description]]"
-      default: ""
-      selector:
-        entity:
-          domain: number
     battery___SLOT___set_discharge_actions:
       name: "[[input.battery.set_discharge_actions.name]]"
       description: "[[input.battery.set_discharge_actions.description]]"
@@ -118,8 +104,6 @@ battery___SLOT___max_discharge_w: !input battery___SLOT___max_discharge_w
 battery___SLOT___max_charge_w: !input battery___SLOT___max_charge_w
 battery___SLOT___priority_discharge: !input battery___SLOT___priority_discharge
 battery___SLOT___cooldown_seconds: !input battery___SLOT___cooldown_seconds
-battery___SLOT___discharge_target_number: !input battery___SLOT___discharge_target_number
-battery___SLOT___charge_target_number: !input battery___SLOT___charge_target_number
 battery___SLOT___set_discharge_actions: !input battery___SLOT___set_discharge_actions
 battery___SLOT___stop_discharge_actions: !input battery___SLOT___stop_discharge_actions
 battery___SLOT___set_charge_actions: !input battery___SLOT___set_charge_actions
@@ -131,23 +115,16 @@ SLOT_STATE_TEMPLATE = """
 slot___SLOT___used: "{{ battery___SLOT___soc_sensor != '' }}"
 slot___SLOT___soc: "{{ states(battery___SLOT___soc_sensor) | float(0) if slot___SLOT___used else 0 }}"
 slot___SLOT___actual_power: "{{ states(battery___SLOT___actual_power_sensor) | float(0) if battery___SLOT___actual_power_sensor != '' else 0 }}"
-slot___SLOT___discharge_direct: "{{ battery___SLOT___discharge_target_number != '' }}"
-slot___SLOT___charge_direct: "{{ battery___SLOT___charge_target_number != '' }}"
 slot___SLOT___has_discharge_actions: "{{ battery___SLOT___set_discharge_actions | count > 0 }}"
 slot___SLOT___has_stop_discharge_actions: "{{ battery___SLOT___stop_discharge_actions | count > 0 }}"
 slot___SLOT___has_charge_actions: "{{ battery___SLOT___set_charge_actions | count > 0 }}"
 slot___SLOT___has_stop_charge_actions: "{{ battery___SLOT___stop_charge_actions | count > 0 }}"
-slot___SLOT___can_discharge: "{{ slot___SLOT___used and battery___SLOT___max_discharge_w | float(0) > 0 and (slot___SLOT___discharge_direct or slot___SLOT___has_discharge_actions) }}"
-slot___SLOT___can_charge: "{{ slot___SLOT___used and battery___SLOT___max_charge_w | float(0) > 0 and (slot___SLOT___charge_direct or slot___SLOT___has_charge_actions) }}"
-current_discharge_number___SLOT__: "{{ states(battery___SLOT___discharge_target_number) | float(0) if slot___SLOT___discharge_direct else 0 }}"
-current_charge_number___SLOT__: "{{ states(battery___SLOT___charge_target_number) | float(0) if slot___SLOT___charge_direct else 0 }}"
+slot___SLOT___can_discharge: "{{ slot___SLOT___used and battery___SLOT___max_discharge_w | float(0) > 0 and slot___SLOT___has_discharge_actions }}"
+slot___SLOT___can_charge: "{{ slot___SLOT___used and battery___SLOT___max_charge_w | float(0) > 0 and slot___SLOT___has_charge_actions }}"
 """.strip()
 
 
 SLOT_VALIDATION_TEMPLATE = """
-{% if slot___SLOT___used and slot___SLOT___discharge_direct and slot___SLOT___charge_direct and battery___SLOT___discharge_target_number == battery___SLOT___charge_target_number %}
-  {% set ns.errors = ns.errors + ['[[slot.__SLOT__]] [[validation.same_direct_number.suffix]]'] %}
-{% endif %}
 {% if slot___SLOT___used and not (slot___SLOT___can_discharge or slot___SLOT___can_charge) %}
   {% set ns.errors = ns.errors + ['[[slot.__SLOT__]] [[validation.no_interface.suffix]]'] %}
 {% endif %}
@@ -165,8 +142,6 @@ SLOT_COOLDOWN_TEMPLATE = """
 discharge_cooldown_ok___SLOT__: >-
   {% if not slot___SLOT___can_discharge %}
     false
-  {% elif slot___SLOT___discharge_direct %}
-    {{ as_timestamp(now()) - as_timestamp(states[battery___SLOT___discharge_target_number].last_changed, 0) >= battery___SLOT___cooldown_seconds | float(0) }}
   {% elif battery___SLOT___actual_power_sensor != '' %}
     {{ as_timestamp(now()) - as_timestamp(states[battery___SLOT___actual_power_sensor].last_changed, 0) >= battery___SLOT___cooldown_seconds | float(0) }}
   {% else %}
@@ -175,8 +150,6 @@ discharge_cooldown_ok___SLOT__: >-
 charge_cooldown_ok___SLOT__: >-
   {% if not slot___SLOT___can_charge %}
     false
-  {% elif slot___SLOT___charge_direct %}
-    {{ as_timestamp(now()) - as_timestamp(states[battery___SLOT___charge_target_number].last_changed, 0) >= battery___SLOT___cooldown_seconds | float(0) }}
   {% elif battery___SLOT___actual_power_sensor != '' %}
     {{ as_timestamp(now()) - as_timestamp(states[battery___SLOT___actual_power_sensor].last_changed, 0) >= battery___SLOT___cooldown_seconds | float(0) }}
   {% else %}
@@ -188,28 +161,14 @@ charge_cooldown_ok___SLOT__: >-
 SLOT_COMMAND_TEMPLATE = """
 discharge_active___SLOT__: "{{ operating_mode == 'discharge' and discharge_target___SLOT__ >= command_deadband_w }}"
 charge_active___SLOT__: "{{ operating_mode == 'charge' and charge_target___SLOT__ >= command_deadband_w }}"
-should_write_discharge_number___SLOT__: "{{ slot___SLOT___discharge_direct and discharge_active___SLOT__ and discharge_cooldown_ok___SLOT__ and (discharge_target___SLOT__ - current_discharge_number___SLOT__) | abs >= command_deadband_w }}"
-should_write_charge_number___SLOT__: "{{ slot___SLOT___charge_direct and charge_active___SLOT__ and charge_cooldown_ok___SLOT__ and (charge_target___SLOT__ - current_charge_number___SLOT__) | abs >= command_deadband_w }}"
-should_run_discharge_actions___SLOT__: "{{ slot___SLOT___has_discharge_actions and discharge_active___SLOT__ and discharge_cooldown_ok___SLOT__ and (not slot___SLOT___discharge_direct or should_write_discharge_number___SLOT__) }}"
-should_run_charge_actions___SLOT__: "{{ slot___SLOT___has_charge_actions and charge_active___SLOT__ and charge_cooldown_ok___SLOT__ and (not slot___SLOT___charge_direct or should_write_charge_number___SLOT__) }}"
-should_reset_discharge_number___SLOT__: "{{ slot___SLOT___discharge_direct and not discharge_active___SLOT__ and current_discharge_number___SLOT__ | abs > 0 }}"
-should_reset_charge_number___SLOT__: "{{ slot___SLOT___charge_direct and not charge_active___SLOT__ and current_charge_number___SLOT__ | abs > 0 }}"
-should_stop_discharge_actions___SLOT__: "{{ slot___SLOT___has_stop_discharge_actions and not discharge_active___SLOT__ and (should_reset_discharge_number___SLOT__ or slot___SLOT___actual_power > command_deadband_w or (not slot___SLOT___discharge_direct and battery___SLOT___actual_power_sensor == '')) }}"
-should_stop_charge_actions___SLOT__: "{{ slot___SLOT___has_stop_charge_actions and not charge_active___SLOT__ and (should_reset_charge_number___SLOT__ or slot___SLOT___actual_power < (0 - command_deadband_w) or (not slot___SLOT___charge_direct and battery___SLOT___actual_power_sensor == '')) }}"
+should_run_discharge_actions___SLOT__: "{{ slot___SLOT___has_discharge_actions and discharge_active___SLOT__ and discharge_cooldown_ok___SLOT__ }}"
+should_run_charge_actions___SLOT__: "{{ slot___SLOT___has_charge_actions and charge_active___SLOT__ and charge_cooldown_ok___SLOT__ }}"
+should_stop_discharge_actions___SLOT__: "{{ slot___SLOT___has_stop_discharge_actions and not discharge_active___SLOT__ and (slot___SLOT___actual_power > command_deadband_w or battery___SLOT___actual_power_sensor == '') }}"
+should_stop_charge_actions___SLOT__: "{{ slot___SLOT___has_stop_charge_actions and not charge_active___SLOT__ and (slot___SLOT___actual_power < (0 - command_deadband_w) or battery___SLOT___actual_power_sensor == '') }}"
 """.strip()
 
 
 SLOT_ACTION_TEMPLATE = """
-- choose:
-    - conditions:
-        - condition: template
-          value_template: "{{ should_reset_discharge_number___SLOT__ }}"
-      sequence:
-        - action: number.set_value
-          target:
-            entity_id: !input battery___SLOT___discharge_target_number
-          data:
-            value: 0
 - choose:
     - conditions:
         - condition: template
@@ -229,16 +188,6 @@ SLOT_ACTION_TEMPLATE = """
 - choose:
     - conditions:
         - condition: template
-          value_template: "{{ should_reset_charge_number___SLOT__ }}"
-      sequence:
-        - action: number.set_value
-          target:
-            entity_id: !input battery___SLOT___charge_target_number
-          data:
-            value: 0
-- choose:
-    - conditions:
-        - condition: template
           value_template: "{{ should_stop_charge_actions___SLOT__ }}"
       sequence:
         - variables:
@@ -255,16 +204,6 @@ SLOT_ACTION_TEMPLATE = """
 - choose:
     - conditions:
         - condition: template
-          value_template: "{{ should_write_discharge_number___SLOT__ }}"
-      sequence:
-        - action: number.set_value
-          target:
-            entity_id: !input battery___SLOT___discharge_target_number
-          data:
-            value: "{{ discharge_target___SLOT__ | round(0) }}"
-- choose:
-    - conditions:
-        - condition: template
           value_template: "{{ should_run_discharge_actions___SLOT__ }}"
       sequence:
         - variables:
@@ -278,16 +217,6 @@ SLOT_ACTION_TEMPLATE = """
             target_charge_w: 0
         - choose: []
           default: !input battery___SLOT___set_discharge_actions
-- choose:
-    - conditions:
-        - condition: template
-          value_template: "{{ should_write_charge_number___SLOT__ }}"
-      sequence:
-        - action: number.set_value
-          target:
-            entity_id: !input battery___SLOT___charge_target_number
-          data:
-            value: "{{ charge_target___SLOT__ | round(0) }}"
 - choose:
     - conditions:
         - condition: template

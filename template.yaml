@@ -26,6 +26,7 @@ blueprint:
             - domain: binary_sensor
             - domain: input_boolean
 
+    # Each battery slot is controlled through custom actions only.
     [[generated.slot_inputs]]
 
 mode: restart
@@ -183,4 +184,5 @@ actions:
           - stop: >-
               [[message.invalid_sensor]]
 
+  # Generated slot actions run custom set/stop actions only.
   [[generated.slot_actions]]

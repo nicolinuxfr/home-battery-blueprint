@@ -1,12 +1,12 @@
 # home-battery-blueprint
 
-Projet de blueprint Home Assistant multilingue pour piloter jusqu'à quatre batteries à partir d'un seul capteur de puissance maison. Le blueprint se concentre sur la décharge, peut absorber un export réel via une charge opportuniste, et combine entités `number` directes et actions personnalisées par batterie. Chaque batterie est rangée dans sa propre section repliée par défaut pour garder un formulaire compact.
+Projet de blueprint Home Assistant multilingue pour piloter jusqu'à quatre batteries à partir d'un seul capteur de puissance maison. Le blueprint se concentre sur la décharge, peut absorber un export réel via une charge opportuniste, et pilote chaque batterie uniquement via des actions personnalisées. Chaque batterie est rangée dans sa propre section repliée par défaut pour garder un formulaire compact.
 
-Ce blueprint est volontairement générique. Il n'essaie pas d'unifier les APIs propres à chaque marque. À la place, chaque slot batterie peut être piloté par :
+Ce blueprint est volontairement générique. Il n'essaie pas d'unifier les APIs propres à chaque marque. À la place, chaque slot batterie est piloté par :
 
-- des entités `number` modifiables pour la décharge et/ou la charge
 - des actions personnalisées pour la décharge et/ou la charge
-- les deux à la fois si une batterie a besoin d'une consigne directe plus d'étapes propres à son intégration
+- des actions d'arrêt optionnelles pour forcer le retour à neutre quand le mode change ou que le blueprint est bloqué
+- des helpers ou services spécifiques à une intégration, cachés derrière ces actions quand une marque a besoin d'une surface de contrôle intermédiaire
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicolinuxfr%2Fhome-battery-blueprint%2Fgh-pages%2Ffr%2Fhome_battery_manager.yaml)
 
@@ -26,8 +26,15 @@ Pour chaque slot batterie :
 - `Puissance maximale de décharge` et `Puissance maximale de charge` : limites manuelles utilisées par l'algorithme.
 - `Prioritaire en décharge` : les batteries prioritaires se vident d'abord ; la charge opportuniste préfère d'abord les batteries non prioritaires.
 - `Cooldown de commande` : délai anti-spam par batterie.
-- `Entité number de décharge directe` et `Entité number de charge directe` : entités de pilotage direct optionnelles.
 - `Actions de mise/arrêt de décharge` et `Actions de mise/arrêt de charge` : actions personnalisées optionnelles, avec des variables d'exécution comme `battery_slot`, `battery_soc`, `target_discharge_w`, `target_charge_w`, `house_power_w` et `export_surplus_w`.
+
+Exemple Zendure :
+
+- crée un helper signé tel que `input_number.zendure_virtual_p1`
+- configure l'option `p1meter` de l'intégration Zendure sur ce helper
+- dans `Actions de mise en décharge`, écris la valeur positive `target_discharge_w` dans le helper
+- dans `Actions de mise en charge`, écris la valeur négative `target_charge_w` dans le helper
+- dans les deux actions d'arrêt, écris `0`
 
 ## Fonctionnement
 
@@ -36,11 +43,11 @@ Pour chaque slot batterie :
 - En charge opportuniste, il détecte un export réel, exige qu'au moins une batterie soit à `99 %` ou plus, puis remplit les batteries chargeables du SOC le plus bas vers le plus haut, en évitant autant que possible les batteries prioritaires en décharge.
 - Une bande morte interne fixe de `50 W` filtre les très petits écarts et évite les écritures inutiles ou les actions répétées. Elle remplace les anciens réglages visibles `Marge de décharge` et `Delta minimal de commande`.
 - La sécurité passe avant tout : passer en charge coupe d'abord tous les chemins de décharge gérés, et passer en décharge coupe d'abord tous les chemins de charge gérés. Le blueprint ne cherche jamais à faire charger et décharger en même temps des batteries qu'il pilote lui-même.
+- Les actions d'arrêt servent à forcer un retour à neutre quand le mode change, quand une entité de blocage s'active, ou quand le capteur maison devient invalide. Cela évite qu'une intégration pilotée par actions conserve une ancienne consigne.
 
 ## Limites connues
 
 - Le blueprint ne crée pas lui-même de capteur de moyenne glissante. Si tu veux un signal lissé, fournis en entrée un capteur déjà filtré.
-- Une seule entité directe bidirectionnelle n'est pas supportée en couple charge/décharge. Utilise des actions personnalisées dans ce cas.
 - Pour les batteries pilotées uniquement par actions, les actions d'arrêt devraient être idempotentes, car le blueprint peut devoir les rejouer pour la sécurité.
 - Le capteur de puissance réelle optionnel fonctionne au mieux lorsqu'il est signé : positif en décharge, négatif en charge.
 - Les métadonnées du blueprint et la documentation pointent vers `nicolinuxfr/home-battery-blueprint`.

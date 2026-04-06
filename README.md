@@ -1,12 +1,12 @@
 # home-battery-blueprint
 
-Localized Home Assistant blueprint project for steering up to four batteries from a single house power sensor. The blueprint focuses on discharge, can absorb real export through opportunistic charging, and mixes direct `number` entities with optional custom actions per battery. Each battery is grouped in its own collapsed section by default to keep the form compact.
+Localized Home Assistant blueprint project for steering up to four batteries from a single house power sensor. The blueprint focuses on discharge, can absorb real export through opportunistic charging, and drives each battery only through custom actions. Each battery is grouped in its own collapsed section by default to keep the form compact.
 
-This blueprint is intentionally generic. It does not try to normalize brand-specific APIs. Instead, each battery slot can be driven by:
+This blueprint is intentionally generic. It does not try to normalize brand-specific APIs. Instead, each battery slot is driven by:
 
-- direct writable `number` entities for discharge and/or charge
 - custom actions for discharge and/or charge
-- both at the same time if a battery needs a direct setpoint plus extra brand-specific steps
+- optional stop actions to force a return to neutral when the operating mode changes or the blueprint is blocked
+- helper entities or vendor services hidden behind those actions when an integration needs an intermediate control surface
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicolinuxfr%2Fhome-battery-blueprint%2Fgh-pages%2Fen%2Fhome_battery_manager.yaml)
 
@@ -26,8 +26,15 @@ For each battery slot:
 - `Maximum discharge power` and `Maximum charge power`: manual limits used by the allocator.
 - `Priority on discharge`: prioritized batteries discharge first; opportunistic charging prefers non-priority batteries first.
 - `Command cooldown`: per-battery anti-spam delay.
-- `Direct discharge number` and `Direct charge number`: optional direct control entities.
 - `Set/Stop discharge actions` and `Set/Stop charge actions`: optional custom actions with runtime variables such as `battery_slot`, `battery_soc`, `target_discharge_w`, `target_charge_w`, `house_power_w` and `export_surplus_w`.
+
+Zendure example:
+
+- create a signed helper such as `input_number.zendure_virtual_p1`
+- point the Zendure integration `p1meter` option to that helper
+- in `Set discharge actions`, write the positive `target_discharge_w` into the helper
+- in `Set charge actions`, write the negative `target_charge_w` into the helper
+- in both stop actions, write `0`
 
 ## How It Works
 
@@ -36,11 +43,11 @@ For each battery slot:
 - During opportunistic charging it looks for real export, requires at least one battery at `99%` or above, and then fills charge-capable batteries from the lowest state of charge upward, avoiding discharge-priority batteries until needed.
 - A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
 - Safety comes first: entering charge stops every managed discharge path first, and entering discharge stops every managed charge path first. The blueprint never intentionally charges and discharges managed batteries at the same time.
+- Stop actions exist to force a neutral state when the mode changes, when a blocking entity becomes active, or when the house power sensor becomes invalid. This prevents an action-based integration from keeping a stale previous command alive.
 
 ## Known Limitations
 
 - The blueprint does not create a moving-average helper. If you want a smoothed house signal, provide an already filtered sensor as input.
-- A single bidirectional direct command entity is not supported as a direct field pair. Use custom actions for that case.
 - For action-only batteries, stop actions should be idempotent because the blueprint may need to repeat them for safety.
 - The optional actual power sensor works best when it is signed: positive for discharge, negative for charge.
 - The blueprint metadata and documentation point to `nicolinuxfr/home-battery-blueprint`.
