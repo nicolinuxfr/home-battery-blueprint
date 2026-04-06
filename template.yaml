@@ -64,17 +64,15 @@ variables:
 
   # Generated validation catches missing target entities and zero power limits
   # before any target update or custom action is executed.
-  validation_errors_json: >-
+  validation_errors: >-
     {% set ns = namespace(errors=[]) %}
     [[generated.slot_validation_lines]]
-    {{ ns.errors | to_json }}
-  validation_errors: "{{ validation_errors_json | from_json }}"
+    {{ ns.errors }}
 
-  batteries_json: >-
+  batteries: >-
     {% set ns = namespace(items=[]) %}
     [[generated.batteries_json_lines]]
-    {{ ns.items | to_json }}
-  batteries: "{{ batteries_json | from_json }}"
+    {{ ns.items }}
   [[generated.count_vars]]
 
   operating_mode: >-
@@ -92,7 +90,7 @@ variables:
       neutral
     {% endif %}
 
-  discharge_order_json: >-
+  discharge_order: >-
     {% set ns = namespace(priority=[], regular=[]) %}
     {% for battery in batteries %}
       {% if battery.can_discharge %}
@@ -103,8 +101,8 @@ variables:
         {% endif %}
       {% endif %}
     {% endfor %}
-    {{ ((ns.priority | sort(attribute='soc', reverse=true)) + (ns.regular | sort(attribute='soc', reverse=true))) | to_json }}
-  charge_order_json: >-
+    {{ (ns.priority | sort(attribute='soc', reverse=true)) + (ns.regular | sort(attribute='soc', reverse=true)) }}
+  charge_order: >-
     {% set ns = namespace(non_priority=[], priority=[]) %}
     {% for battery in batteries %}
       {% if battery.can_charge %}
@@ -115,10 +113,10 @@ variables:
         {% endif %}
       {% endif %}
     {% endfor %}
-    {{ ((ns.non_priority | sort(attribute='soc')) + (ns.priority | sort(attribute='soc'))) | to_json }}
+    {{ (ns.non_priority | sort(attribute='soc')) + (ns.priority | sort(attribute='soc')) }}
 
-  discharge_targets_json: >-
-    {% set batteries = discharge_order_json | from_json %}
+  discharge_targets: >-
+    {% set batteries = discharge_order %}
     {% set ns = namespace(remaining=import_need_w | float(0), t1=0, t2=0, t3=0, t4=0) %}
     {% if operating_mode == 'discharge' %}
       {% for battery in batteries %}
@@ -136,9 +134,9 @@ variables:
         {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
       {% endfor %}
     {% endif %}
-    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} | to_json }}
-  charge_targets_json: >-
-    {% set batteries = charge_order_json | from_json %}
+    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
+  charge_targets: >-
+    {% set batteries = charge_order %}
     {% set ns = namespace(remaining=export_surplus_w | float(0), t1=0, t2=0, t3=0, t4=0) %}
     {% if operating_mode == 'charge' %}
       {% for battery in batteries %}
@@ -156,17 +154,17 @@ variables:
         {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
       {% endfor %}
     {% endif %}
-    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} | to_json }}
+    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
 
-  discharge_target_1: "{{ (discharge_targets_json | from_json)['1'] | float(0) }}"
-  discharge_target_2: "{{ (discharge_targets_json | from_json)['2'] | float(0) }}"
-  discharge_target_3: "{{ (discharge_targets_json | from_json)['3'] | float(0) }}"
-  discharge_target_4: "{{ (discharge_targets_json | from_json)['4'] | float(0) }}"
+  discharge_target_1: "{{ discharge_targets['1'] | float(0) }}"
+  discharge_target_2: "{{ discharge_targets['2'] | float(0) }}"
+  discharge_target_3: "{{ discharge_targets['3'] | float(0) }}"
+  discharge_target_4: "{{ discharge_targets['4'] | float(0) }}"
 
-  charge_target_1: "{{ (charge_targets_json | from_json)['1'] | float(0) }}"
-  charge_target_2: "{{ (charge_targets_json | from_json)['2'] | float(0) }}"
-  charge_target_3: "{{ (charge_targets_json | from_json)['3'] | float(0) }}"
-  charge_target_4: "{{ (charge_targets_json | from_json)['4'] | float(0) }}"
+  charge_target_1: "{{ charge_targets['1'] | float(0) }}"
+  charge_target_2: "{{ charge_targets['2'] | float(0) }}"
+  charge_target_3: "{{ charge_targets['3'] | float(0) }}"
+  charge_target_4: "{{ charge_targets['4'] | float(0) }}"
 
   [[generated.cooldown_vars]]
 

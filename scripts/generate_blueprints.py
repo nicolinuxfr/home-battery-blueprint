@@ -257,8 +257,9 @@ SLOT_ACTION_TEMPLATE = """
               sequence:
                 - alias: "[[slot.__SLOT__]]: [[trace.write_number_target_suffix]]"
                   action: number.set_value
-                  data:
+                  target:
                     entity_id: "{{ battery___SLOT___target_power_entity }}"
+                  data:
                     value: "{{ target_power_w | round(0) | int(0) }}"
             - conditions:
                 - condition: template
@@ -266,8 +267,9 @@ SLOT_ACTION_TEMPLATE = """
               sequence:
                 - alias: "[[slot.__SLOT__]]: [[trace.write_input_number_target_suffix]]"
                   action: input_number.set_value
-                  data:
+                  target:
                     entity_id: "{{ battery___SLOT___target_power_entity }}"
+                  data:
                     value: "{{ target_power_w | round(0) | int(0) }}"
 - alias: "[[slot.__SLOT__]]: [[trace.run_discharge_actions_suffix]]"
   choose:
@@ -451,9 +453,9 @@ def build_generated_values() -> dict[str, str]:
         ),
         "generated.count_vars": "\n".join(
             [
-                f'discharge_capable_count: "{{ {discharge_count} }}"',
-                f'charge_capable_count: "{{ {charge_count} }}"',
-                f'near_full_exists: "{{ {near_full_expr} }}"',
+                f'discharge_capable_count: "{{{{ {discharge_count} }}}}"',
+                f'charge_capable_count: "{{{{ {charge_count} }}}}"',
+                f'near_full_exists: "{{{{ {near_full_expr} }}}}"',
             ]
         ),
         "generated.cooldown_vars": join_blocks(
