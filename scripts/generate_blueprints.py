@@ -186,8 +186,15 @@ slot___SLOT___actual_power_fresh: >-
 slot___SLOT___effective_balance_power: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% set discharge_gap = current_target - (slot___SLOT___actual_discharge_w | float(0)) %}
+  {% set discharge_lead = (slot___SLOT___actual_discharge_w | float(0)) - current_target %}
   {% set charge_gap = (0 - current_target) - (slot___SLOT___actual_charge_w | float(0)) %}
   {% if current_target > 0
+        and (battery___SLOT___priority_discharge | bool)
+        and slot___SLOT___actual_power_fresh | bool
+        and slot___SLOT___target_age_s | float(0) >= slot___SLOT___response_grace_s | float(0)
+        and discharge_lead > 50 %}
+    {{ slot___SLOT___actual_discharge_w | float(0) }}
+  {% elif current_target > 0
         and not (battery___SLOT___priority_discharge | bool)
         and slot___SLOT___actual_power_fresh | bool
         and slot___SLOT___target_age_s | float(0) >= slot___SLOT___response_grace_s | float(0)
