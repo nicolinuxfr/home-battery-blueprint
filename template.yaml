@@ -77,6 +77,9 @@ variables:
   # its grace period. Priority discharge batteries are never trimmed down by
   # this correction, but fresh telemetry can still raise their effective
   # contribution when they are already delivering more than their signed target.
+  # If a priority battery keeps commanding discharge but fresh telemetry shows
+  # it is no longer delivering materially above zero after its grace period, it
+  # stops being treated as priority until it actually contributes again.
   managed_battery_power_w: >-
     {{
       (slot_1_effective_balance_power | float(0))

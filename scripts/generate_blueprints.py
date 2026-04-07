@@ -210,7 +210,17 @@ slot___SLOT___effective_balance_power: >-
   {% endif %}
 slot___SLOT___has_discharge_actions: "{{ battery___SLOT___discharge_actions | count > 0 }}"
 slot___SLOT___has_charge_actions: "{{ battery___SLOT___charge_actions | count > 0 }}"
-slot___SLOT___discharge_delivery_stalled: "false"
+slot___SLOT___discharge_delivery_stalled: >-
+  {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% set actual_discharge = slot___SLOT___actual_discharge_w | float(0) %}
+  {% if current_target <= 0
+        or not (battery___SLOT___priority_discharge | bool)
+        or not (slot___SLOT___actual_power_fresh | bool)
+        or slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
+    false
+  {% else %}
+    {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
+  {% endif %}
 slot___SLOT___charge_delivery_stalled: "false"
 slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 }}"
 slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 }}"
@@ -246,13 +256,14 @@ SLOT_BATTERIES_TEMPLATE = """
   {% set ns.items = ns.items + [{
     'slot': __SLOT__,
     'soc': slot___SLOT___soc | float(0),
-    'priority': battery___SLOT___priority_discharge | bool,
+    'priority': (battery___SLOT___priority_discharge | bool) and not (slot___SLOT___discharge_delivery_stalled | bool),
     'max_discharge': battery___SLOT___max_discharge_w | float(0),
     'max_charge': battery___SLOT___max_charge_w | float(0),
     'can_discharge': slot___SLOT___can_discharge | bool,
     'can_charge': slot___SLOT___can_charge | bool,
     'current_discharge': reserved_discharge,
     'current_charge': reserved_charge,
+    'priority_delivery_stalled': slot___SLOT___discharge_delivery_stalled | bool,
     'discharge_locked': slot___SLOT___can_discharge and current_target > 0 and not (discharge_cooldown_ok___SLOT__ | bool),
     'charge_locked': slot___SLOT___can_charge and current_target < 0 and not (charge_cooldown_ok___SLOT__ | bool)
   }] %}
