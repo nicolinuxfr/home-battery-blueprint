@@ -17,6 +17,12 @@ blueprint:
           filter:
             - domain: sensor
               device_class: power
+    house_power_is_smoothed:
+      name: "[[input.house_power_is_smoothed.name]]"
+      description: "[[input.house_power_is_smoothed.description]]"
+      default: false
+      selector:
+        boolean: {}
     blocking_entities:
       name: "[[input.blocking_entities.name]]"
       description: "[[input.blocking_entities.description]]"
@@ -43,6 +49,7 @@ triggers:
 
 variables:
   house_power_sensor: !input house_power_sensor
+  house_power_is_smoothed: !input house_power_is_smoothed
   blocking_entities: !input blocking_entities
   command_deadband_w: 50
 
@@ -83,7 +90,11 @@ variables:
     }}
   adjusted_house_power_w: >-
     {% if house_power_valid %}
-      {{ (house_power_w | float(0)) + (managed_battery_power_w | float(0)) }}
+      {% if house_power_is_smoothed %}
+        {{ house_power_w | float(0) }}
+      {% else %}
+        {{ (house_power_w | float(0)) + (managed_battery_power_w | float(0)) }}
+      {% endif %}
     {% else %}
       0
     {% endif %}

@@ -31,6 +31,8 @@
   "slot.4": "Batterie 4",
   "input.house_power_sensor.name": "Capteur de puissance maison",
   "input.house_power_sensor.description": "Capteur principal de puissance maison. Ce sélecteur n'affiche que les capteurs de puissance. Utilise un capteur signé en watts avec des valeurs positives en import et négatives en export.",
+  "input.house_power_is_smoothed.name": "Capteur maison déjà lissé",
+  "input.house_power_is_smoothed.description": "Active cette option si le capteur de puissance maison sélectionné expose déjà une moyenne glissante ou une autre valeur filtrée à prendre telle quelle. Quand cette option est active, le blueprint utilise directement cette valeur et ne reconstruit plus la demande maison sous-jacente en réajoutant les consignes actives des batteries gérées.",
   "input.blocking_entities.name": "Entités de blocage",
   "input.blocking_entities.description": "Entités optionnelles qui doivent toutes rester à off pour que le blueprint tourne. Si une entité sélectionnée passe à on, unknown ou unavailable, le blueprint peut remettre toutes les batteries gérées à neutre uniquement sur ce changement d'état, puis il arrête toutes les actions personnalisées de charge et de décharge et ignore les runs bloqués suivants tant que tous les bloqueurs ne sont pas revenus à off.",
   "input.battery.soc_sensor.name": "Capteur d'état de charge",
