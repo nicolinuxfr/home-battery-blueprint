@@ -74,6 +74,15 @@ battery___SLOT___section:
           filter:
             - domain: number
             - domain: input_number
+    battery___SLOT___actual_power_sensor:
+      name: "[[input.battery.actual_power_sensor.name]]"
+      description: "[[input.battery.actual_power_sensor.description]]"
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: power
     battery___SLOT___discharge_actions:
       name: "[[input.battery.discharge_actions.name]]"
       description: "[[input.battery.discharge_actions.description]]"
@@ -96,6 +105,7 @@ battery___SLOT___max_charge_w: !input battery___SLOT___max_charge_w
 battery___SLOT___priority_discharge: !input battery___SLOT___priority_discharge
 battery___SLOT___cooldown_seconds: !input battery___SLOT___cooldown_seconds
 battery___SLOT___target_power_entity: !input battery___SLOT___target_power_entity
+battery___SLOT___actual_power_sensor: !input battery___SLOT___actual_power_sensor
 battery___SLOT___discharge_actions: !input battery___SLOT___discharge_actions
 battery___SLOT___charge_actions: !input battery___SLOT___charge_actions
 """.strip()
@@ -139,8 +149,57 @@ slot___SLOT___current_target_sign: >-
   {% else %}
     0
   {% endif %}
+slot___SLOT___actual_power_sensor_configured: "{{ battery___SLOT___actual_power_sensor != '' }}"
+slot___SLOT___actual_power_state: >-
+  {% if slot___SLOT___actual_power_sensor_configured %}
+    {{ states(battery___SLOT___actual_power_sensor) }}
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___actual_power_last_updated_ts: >-
+  {% if slot___SLOT___actual_power_sensor_configured %}
+    {% set actual_state = states[battery___SLOT___actual_power_sensor] %}
+    {{ as_timestamp(actual_state.last_updated, 0) if actual_state is not none else 0 }}
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___actual_power_age_s: >-
+  {% if slot___SLOT___actual_power_last_updated_ts | float(0) > 0 %}
+    {{ [as_timestamp(now()) - (slot___SLOT___actual_power_last_updated_ts | float(0)), 0] | max }}
+  {% else %}
+    999999
+  {% endif %}
+slot___SLOT___actual_power_w: >-
+  {% if slot___SLOT___actual_power_state in ['unknown', 'unavailable', 'none', ''] %}
+    0
+  {% else %}
+    {{ slot___SLOT___actual_power_state | float(0) }}
+  {% endif %}
+slot___SLOT___actual_discharge_w: "{{ [slot___SLOT___actual_power_w | float(0), 0] | max }}"
+slot___SLOT___actual_charge_w: "{{ [0 - (slot___SLOT___actual_power_w | float(0)), 0] | max }}"
+slot___SLOT___actual_power_fresh: >-
+  {% if not slot___SLOT___actual_power_sensor_configured %}
+    false
+  {% else %}
+    {{ slot___SLOT___actual_power_age_s | float(999999) <= [slot___SLOT___response_grace_s | float(0), 45] | max }}
+  {% endif %}
 slot___SLOT___effective_balance_power: >-
-  {{ slot___SLOT___current_target_w | float(0) }}
+  {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% set discharge_gap = current_target - (slot___SLOT___actual_discharge_w | float(0)) %}
+  {% set charge_gap = (0 - current_target) - (slot___SLOT___actual_charge_w | float(0)) %}
+  {% if current_target > 0
+        and slot___SLOT___actual_power_fresh | bool
+        and slot___SLOT___target_age_s | float(0) >= slot___SLOT___response_grace_s | float(0)
+        and discharge_gap > 50 %}
+    {{ slot___SLOT___actual_discharge_w | float(0) }}
+  {% elif current_target < 0
+        and slot___SLOT___actual_power_fresh | bool
+        and slot___SLOT___target_age_s | float(0) >= slot___SLOT___response_grace_s | float(0)
+        and charge_gap > 50 %}
+    {{ 0 - (slot___SLOT___actual_charge_w | float(0)) }}
+  {% else %}
+    {{ current_target }}
+  {% endif %}
 slot___SLOT___has_discharge_actions: "{{ battery___SLOT___discharge_actions | count > 0 }}"
 slot___SLOT___has_charge_actions: "{{ battery___SLOT___charge_actions | count > 0 }}"
 slot___SLOT___discharge_delivery_stalled: "false"

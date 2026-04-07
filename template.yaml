@@ -71,9 +71,9 @@ variables:
   [[generated.slot_state_vars]]
 
   # Rebuild the underlying house demand from the net house meter plus the
-  # signed targets currently assigned to managed batteries. This keeps the
-  # control loop anchored to the reliable house sensor instead of slow vendor
-  # telemetry from individual batteries.
+  # effective managed battery contribution. Signed targets stay primary, while
+  # optional actual-power sensors can only trim that contribution later as a
+  # secondary correction if a battery keeps under-delivering after its grace period.
   managed_battery_power_w: >-
     {{
       (slot_1_effective_balance_power | float(0))
