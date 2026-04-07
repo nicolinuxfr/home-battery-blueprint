@@ -26,15 +26,6 @@ battery___SLOT___section:
           filter:
             - domain: sensor
               device_class: battery
-    battery___SLOT___actual_power_sensor:
-      name: "[[input.battery.actual_power_sensor.name]]"
-      description: "[[input.battery.actual_power_sensor.description]]"
-      default: ""
-      selector:
-        entity:
-          filter:
-            - domain: sensor
-              device_class: power
     battery___SLOT___max_discharge_w:
       name: "[[input.battery.max_discharge_w.name]]"
       description: "[[input.battery.max_discharge_w.description]]"
@@ -100,7 +91,6 @@ battery___SLOT___section:
 
 SLOT_BINDING_TEMPLATE = """
 battery___SLOT___soc_sensor: !input battery___SLOT___soc_sensor
-battery___SLOT___actual_power_sensor: !input battery___SLOT___actual_power_sensor
 battery___SLOT___max_discharge_w: !input battery___SLOT___max_discharge_w
 battery___SLOT___max_charge_w: !input battery___SLOT___max_charge_w
 battery___SLOT___priority_discharge: !input battery___SLOT___priority_discharge
@@ -114,19 +104,6 @@ battery___SLOT___charge_actions: !input battery___SLOT___charge_actions
 SLOT_STATE_TEMPLATE = """
 slot___SLOT___used: "{{ battery___SLOT___soc_sensor != '' }}"
 slot___SLOT___soc: "{{ states(battery___SLOT___soc_sensor) | float(0) if slot___SLOT___used else 0 }}"
-slot___SLOT___actual_power_sensor_configured: "{{ battery___SLOT___actual_power_sensor != '' }}"
-slot___SLOT___actual_power_state: >-
-  {% if slot___SLOT___actual_power_sensor_configured %}
-    {{ states(battery___SLOT___actual_power_sensor) }}
-  {% else %}
-    0
-  {% endif %}
-slot___SLOT___actual_power: >-
-  {% if slot___SLOT___actual_power_state in ['unknown', 'unavailable', 'none', ''] %}
-    0
-  {% else %}
-    {{ slot___SLOT___actual_power_state | float(0) }}
-  {% endif %}
 slot___SLOT___target_entity_configured: "{{ battery___SLOT___target_power_entity != '' }}"
 slot___SLOT___target_power_state: >-
   {% if slot___SLOT___target_entity_configured %}
@@ -163,35 +140,13 @@ slot___SLOT___current_target_sign: >-
     0
   {% endif %}
 slot___SLOT___effective_balance_power: >-
-  {% set current_target = slot___SLOT___current_target_w | float(0) %}
-  {% set actual_power = slot___SLOT___actual_power | float(0) %}
-  {% if current_target == 0 %}
-    {{ actual_power }}
-  {% elif slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
-    {{ current_target }}
-  {% elif slot___SLOT___actual_power_sensor_configured %}
-    {{ actual_power }}
-  {% else %}
-    {{ current_target }}
-  {% endif %}
+  {{ slot___SLOT___current_target_w | float(0) }}
 slot___SLOT___has_discharge_actions: "{{ battery___SLOT___discharge_actions | count > 0 }}"
 slot___SLOT___has_charge_actions: "{{ battery___SLOT___charge_actions | count > 0 }}"
-slot___SLOT___discharge_delivery_stalled: >-
-  {{
-    slot___SLOT___actual_power_sensor_configured
-    and slot___SLOT___current_target_w | float(0) >= command_deadband_w
-    and slot___SLOT___actual_power | float(0) < command_deadband_w
-    and slot___SLOT___target_age_s | float(0) >= slot___SLOT___response_grace_s | float(0)
-  }}
-slot___SLOT___charge_delivery_stalled: >-
-  {{
-    slot___SLOT___actual_power_sensor_configured
-    and slot___SLOT___current_target_w | float(0) <= (0 - command_deadband_w)
-    and slot___SLOT___actual_power | float(0) > (0 - command_deadband_w)
-    and slot___SLOT___target_age_s | float(0) >= slot___SLOT___response_grace_s | float(0)
-  }}
-slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 and not (slot___SLOT___discharge_delivery_stalled | bool) }}"
-slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 and not (slot___SLOT___charge_delivery_stalled | bool) }}"
+slot___SLOT___discharge_delivery_stalled: "false"
+slot___SLOT___charge_delivery_stalled: "false"
+slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 }}"
+slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 }}"
 """.strip()
 
 
@@ -338,7 +293,6 @@ SLOT_ACTION_TEMPLATE = """
           variables:
             battery_slot: __SLOT__
             battery_soc: "{{ slot___SLOT___soc }}"
-            battery_actual_power_w: "{{ slot___SLOT___actual_power }}"
             house_power_w: "{{ house_power_w }}"
             import_need_w: "{{ import_need_w }}"
             export_surplus_w: "{{ export_surplus_w }}"
@@ -386,7 +340,6 @@ SLOT_ACTION_TEMPLATE = """
           variables:
             battery_slot: __SLOT__
             battery_soc: "{{ slot___SLOT___soc }}"
-            battery_actual_power_w: "{{ slot___SLOT___actual_power }}"
             house_power_w: "{{ house_power_w }}"
             import_need_w: "{{ import_need_w }}"
             export_surplus_w: "{{ export_surplus_w }}"
@@ -413,7 +366,6 @@ SLOT_ACTION_TEMPLATE = """
           variables:
             battery_slot: __SLOT__
             battery_soc: "{{ slot___SLOT___soc }}"
-            battery_actual_power_w: "{{ slot___SLOT___actual_power }}"
             house_power_w: "{{ house_power_w }}"
             import_need_w: "{{ import_need_w }}"
             export_surplus_w: "{{ export_surplus_w }}"

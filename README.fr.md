@@ -22,7 +22,6 @@ URL brute d'import :
 Pour chaque slot batterie :
 
 - `Capteur d'état de charge` : laisser vide désactive le slot. Le sélecteur n'affiche que les capteurs de batterie qui remontent un pourcentage. Si tu le renseignes, le slot doit aussi exposer une entité numérique de consigne et au moins une puissance max non nulle.
-- `Capteur de puissance batterie réelle` : optionnel mais fortement recommandé pour les intégrations qui limitent la fréquence des commandes ou appliquent les changements avec retard. Utilise un capteur signé en `W`, positif quand la batterie alimente la maison et négatif quand elle charge. Pendant le cooldown, l'allocateur utilise cette puissance mesurée au lieu de supposer que la dernière consigne est réellement fournie.
 - `Puissance maximale de décharge` et `Puissance maximale de charge` : limites manuelles utilisées par l'algorithme.
 - `Prioritaire en décharge` : les batteries prioritaires se vident d'abord ; la charge opportuniste préfère d'abord les batteries non prioritaires.
 - `Entité de consigne de puissance` : entité `number` ou `input_number` écrite par le blueprint. La consigne est signée : positive en décharge, négative en charge, `0` à l'arrêt. Si tu actives la charge, l'entité choisie doit accepter les valeurs négatives.
@@ -40,10 +39,8 @@ Exemple Zendure :
 
 - À chaque run, le blueprint choisit un seul mode exclusif : `discharge`, `charge` ou `neutral`.
 - En décharge, il répartit `max(house_power, 0)` entre les batteries, en privilégiant d'abord les batteries marquées prioritaires puis en triant par pourcentage de charge décroissant.
-- Quand des capteurs de puissance batterie réelle sont configurés, l'allocateur reconstruit la demande maison sous-jacente en réajoutant la puissance déjà fournie par les batteries gérées. Cela évite que le capteur maison annule artificiellement le travail des batteries et crée des oscillations.
-- Si une batterie est encore en cooldown, l'allocateur ne réserve maintenant que la puissance qu'elle délivre réellement lorsqu'un capteur de puissance réelle est configuré. Sans ce capteur, il retombe sur la dernière consigne demandée.
-- Si un capteur de puissance réelle reste proche de `0 W` après une consigne non nulle, le blueprint continue temporairement de faire confiance à cette consigne pendant une fenêtre égale à `max(20 s, cooldown de cette batterie)`. Après cela, il cesse d'allouer la charge à cette batterie et laisse une autre batterie prendre le relais.
-- Pendant cette même fenêtre, l'allocateur considère temporairement que la dernière consigne non nulle est effective avant de revenir à la puissance mesurée. Cela tient compte de la latence de télémétrie au lieu de couper immédiatement une batterie parce que son capteur n'a pas encore suivi.
+- L'allocateur reconstruit la demande maison sous-jacente à partir du capteur maison net en réajoutant les consignes signées déjà actives sur les batteries gérées. Cela évite que le capteur maison annule artificiellement le travail des batteries et limite fortement les oscillations dues aux télémétries vendor lentes.
+- Pendant un cooldown ou une phase de latence, le blueprint continue de raisonner à partir de la consigne déjà active et de l'effet observé sur la consommation nette de la maison, sans dépendre d'une télémétrie batterie lente ou irrégulière.
 - En charge opportuniste, il détecte un export réel, exige qu'au moins une batterie soit à `99 %` ou plus, puis remplit les batteries chargeables du SOC le plus bas vers le plus haut, en évitant autant que possible les batteries prioritaires en décharge.
 - Une bande morte interne fixe de `50 W` filtre les très petits écarts et évite les écritures inutiles ou les actions répétées. Elle remplace les anciens réglages visibles `Marge de décharge` et `Delta minimal de commande`.
 - En zone morte `neutral`, le blueprint conserve maintenant la contribution déjà en cours des batteries gérées au lieu de retomber immédiatement à `0`. Cela évite les cycles marche/arrêt quand une batterie vient juste de compenser presque toute la demande maison.

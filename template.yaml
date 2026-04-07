@@ -70,8 +70,10 @@ variables:
 
   [[generated.slot_state_vars]]
 
-  # Rebuild the underlying house demand by adding back the power that managed
-  # batteries are already delivering or subtracting what they are currently absorbing.
+  # Rebuild the underlying house demand from the net house meter plus the
+  # signed targets currently assigned to managed batteries. This keeps the
+  # control loop anchored to the reliable house sensor instead of slow vendor
+  # telemetry from individual batteries.
   managed_battery_power_w: >-
     {{
       (slot_1_effective_balance_power | float(0))

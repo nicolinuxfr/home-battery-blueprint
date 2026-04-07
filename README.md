@@ -22,7 +22,6 @@ Raw import URL:
 For each battery slot:
 
 - `State of charge sensor`: leaving it empty disables the slot. The selector only shows battery sensors that report a percentage. If you fill it, the slot must also expose a numeric target entity and at least one non-zero power limit.
-- `Actual battery power sensor`: optional but strongly recommended for integrations that rate-limit or lag behind commands. Use a signed power sensor in `W` with positive values while discharging and negative values while charging. During cooldown, the allocator uses this measured power instead of assuming the last target is really being delivered.
 - `Maximum discharge power` and `Maximum charge power`: manual limits used by the allocator.
 - `Priority on discharge`: prioritized batteries discharge first; opportunistic charging prefers non-priority batteries first.
 - `Target power entity`: the `number` or `input_number` entity written by the blueprint. The target is signed: positive for discharge, negative for charge, `0` for stop. If charging is enabled, the selected entity must accept negative values.
@@ -40,10 +39,8 @@ Zendure example:
 
 - The blueprint chooses one exclusive operating mode per run: `discharge`, `charge`, or `neutral`.
 - During discharge it allocates `max(house_power, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
-- When actual battery power sensors are configured, the allocator rebuilds the underlying house demand by adding back the power already delivered by managed batteries. This prevents the house power sensor from cancelling out the batteries' own work and causing oscillation.
-- If a battery is still in cooldown, the allocator now reserves only the power it is measurably delivering when an actual power sensor is configured. Without that sensor, it falls back to the last commanded target.
-- If an actual power sensor stays near `0 W` after a non-zero command, the blueprint temporarily keeps trusting the command during a grace window equal to `max(20 s, that battery's cooldown)`. After that, it stops allocating new load to that battery and lets another battery take over.
-- During that same grace window, the allocator temporarily assumes the last non-zero command is effective before switching to measured power. This accounts for telemetry latency instead of cutting a battery immediately because its power sensor has not caught up yet.
+- The allocator rebuilds the underlying house demand from the net house meter by adding back the signed targets already active on managed batteries. This prevents the house sensor from cancelling out the batteries' own work and avoids depending on slow vendor telemetry.
+- During cooldown or telemetry latency, the blueprint therefore keeps reasoning from the active target and the observed net house consumption instead of waiting for slow or irregular battery telemetry to catch up.
 - During opportunistic charging it looks for real export, requires at least one battery at `99%` or above, and then fills charge-capable batteries from the lowest state of charge upward, avoiding discharge-priority batteries until needed.
 - A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
 - In the `neutral` deadband, the blueprint now keeps the current contribution of managed batteries instead of immediately falling back to `0`. This avoids rapid on/off cycling when a battery has just offset almost all of the house demand.
