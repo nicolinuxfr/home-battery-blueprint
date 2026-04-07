@@ -44,7 +44,8 @@ triggers:
 variables:
   house_power_sensor: !input house_power_sensor
   blocking_entities: !input blocking_entities
-  command_deadband_w: 50
+  command_deadband_w: 60
+  release_deadband_w: 80
 
   [[generated.slot_bindings]]
 
@@ -112,6 +113,28 @@ variables:
     [[generated.batteries_json_lines]]
     {{ ns.items }}
   [[generated.count_vars]]
+  current_total_discharge_w: >-
+    {{
+      (slot_1_current_target_w | float(0) if slot_1_current_target_w | float(0) > 0 else 0)
+      + (slot_2_current_target_w | float(0) if slot_2_current_target_w | float(0) > 0 else 0)
+      + (slot_3_current_target_w | float(0) if slot_3_current_target_w | float(0) > 0 else 0)
+      + (slot_4_current_target_w | float(0) if slot_4_current_target_w | float(0) > 0 else 0)
+    }}
+  current_total_charge_w: >-
+    {{
+      (0 - (slot_1_current_target_w | float(0)) if slot_1_current_target_w | float(0) < 0 else 0)
+      + (0 - (slot_2_current_target_w | float(0)) if slot_2_current_target_w | float(0) < 0 else 0)
+      + (0 - (slot_3_current_target_w | float(0)) if slot_3_current_target_w | float(0) < 0 else 0)
+      + (0 - (slot_4_current_target_w | float(0)) if slot_4_current_target_w | float(0) < 0 else 0)
+    }}
+  hold_discharge_mode: >-
+    {{ current_total_discharge_w >= command_deadband_w
+       and import_need_w < command_deadband_w
+       and export_surplus_w < release_deadband_w }}
+  hold_charge_mode: >-
+    {{ current_total_charge_w >= command_deadband_w
+       and export_surplus_w < command_deadband_w
+       and import_need_w < release_deadband_w }}
 
   operating_mode: >-
     {% if gate_blocked %}
@@ -122,8 +145,12 @@ variables:
       invalid_sensor
     {% elif import_need_w >= command_deadband_w and discharge_capable_count > 0 %}
       discharge
+    {% elif hold_discharge_mode %}
+      discharge_hold
     {% elif export_surplus_w >= command_deadband_w and near_full_exists and charge_capable_count > 0 %}
       charge
+    {% elif hold_charge_mode %}
+      charge_hold
     {% else %}
       neutral
     {% endif %}
@@ -189,6 +216,19 @@ variables:
           {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
         {% endif %}
       {% endfor %}
+    {% elif operating_mode == 'discharge_hold' %}
+      {% for battery in batteries %}
+        {% set allocation = battery.current_discharge | float(0) %}
+        {% if battery.slot == 1 %}
+          {% set ns.t1 = allocation | round(0) %}
+        {% elif battery.slot == 2 %}
+          {% set ns.t2 = allocation | round(0) %}
+        {% elif battery.slot == 3 %}
+          {% set ns.t3 = allocation | round(0) %}
+        {% elif battery.slot == 4 %}
+          {% set ns.t4 = allocation | round(0) %}
+        {% endif %}
+      {% endfor %}
     {% endif %}
     {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
   charge_targets: >-
@@ -225,6 +265,19 @@ variables:
             {% set ns.t4 = allocation | round(0) %}
           {% endif %}
           {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+        {% endif %}
+      {% endfor %}
+    {% elif operating_mode == 'charge_hold' %}
+      {% for battery in batteries %}
+        {% set allocation = battery.current_charge | float(0) %}
+        {% if battery.slot == 1 %}
+          {% set ns.t1 = allocation | round(0) %}
+        {% elif battery.slot == 2 %}
+          {% set ns.t2 = allocation | round(0) %}
+        {% elif battery.slot == 3 %}
+          {% set ns.t3 = allocation | round(0) %}
+        {% elif battery.slot == 4 %}
+          {% set ns.t4 = allocation | round(0) %}
         {% endif %}
       {% endfor %}
     {% endif %}
