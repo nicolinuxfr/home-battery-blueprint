@@ -68,10 +68,26 @@ variables:
   house_power_state: "{{ states(house_power_sensor) }}"
   house_power_valid: "{{ house_power_state not in ['unknown', 'unavailable', 'none', ''] }}"
   house_power_w: "{{ house_power_state | float(0) }}"
-  import_need_w: "{{ [house_power_w, 0] | max if house_power_valid else 0 }}"
-  export_surplus_w: "{{ [0 - house_power_w, 0] | max if house_power_valid else 0 }}"
 
   [[generated.slot_state_vars]]
+
+  # Rebuild the underlying house demand by adding back the power that managed
+  # batteries are already delivering or subtracting what they are currently absorbing.
+  managed_battery_power_w: >-
+    {{
+      (slot_1_actual_power | float(0))
+      + (slot_2_actual_power | float(0))
+      + (slot_3_actual_power | float(0))
+      + (slot_4_actual_power | float(0))
+    }}
+  adjusted_house_power_w: >-
+    {% if house_power_valid %}
+      {{ (house_power_w | float(0)) + (managed_battery_power_w | float(0)) }}
+    {% else %}
+      0
+    {% endif %}
+  import_need_w: "{{ [adjusted_house_power_w, 0] | max if house_power_valid else 0 }}"
+  export_surplus_w: "{{ [0 - adjusted_house_power_w, 0] | max if house_power_valid else 0 }}"
 
   # Generated validation catches missing target entities and zero power limits
   # before any target update or custom action is executed.

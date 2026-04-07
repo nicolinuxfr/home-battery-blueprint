@@ -40,6 +40,7 @@ Zendure example:
 
 - The blueprint chooses one exclusive operating mode per run: `discharge`, `charge`, or `neutral`.
 - During discharge it allocates `max(house_power, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
+- When actual battery power sensors are configured, the allocator rebuilds the underlying house demand by adding back the power already delivered by managed batteries. This prevents the house power sensor from cancelling out the batteries' own work and causing oscillation.
 - If a battery is still in cooldown, the allocator now reserves only the power it is measurably delivering when an actual power sensor is configured. Without that sensor, it falls back to the last commanded target.
 - If an actual power sensor stays near `0 W` for about 20 seconds after a non-zero command, the blueprint temporarily stops allocating new load to that battery and lets another battery take over.
 - During opportunistic charging it looks for real export, requires at least one battery at `99%` or above, and then fills charge-capable batteries from the lowest state of charge upward, avoiding discharge-priority batteries until needed.

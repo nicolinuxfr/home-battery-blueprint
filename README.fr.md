@@ -40,6 +40,7 @@ Exemple Zendure :
 
 - À chaque run, le blueprint choisit un seul mode exclusif : `discharge`, `charge` ou `neutral`.
 - En décharge, il répartit `max(house_power, 0)` entre les batteries, en privilégiant d'abord les batteries marquées prioritaires puis en triant par pourcentage de charge décroissant.
+- Quand des capteurs de puissance batterie réelle sont configurés, l'allocateur reconstruit la demande maison sous-jacente en réajoutant la puissance déjà fournie par les batteries gérées. Cela évite que le capteur maison annule artificiellement le travail des batteries et crée des oscillations.
 - Si une batterie est encore en cooldown, l'allocateur ne réserve maintenant que la puissance qu'elle délivre réellement lorsqu'un capteur de puissance réelle est configuré. Sans ce capteur, il retombe sur la dernière consigne demandée.
 - Si un capteur de puissance réelle reste proche de `0 W` pendant environ 20 secondes après une consigne non nulle, le blueprint cesse temporairement d'allouer la charge à cette batterie et laisse une autre batterie prendre le relais.
 - En charge opportuniste, il détecte un export réel, exige qu'au moins une batterie soit à `99 %` ou plus, puis remplit les batteries chargeables du SOC le plus bas vers le plus haut, en évitant autant que possible les batteries prioritaires en décharge.
