@@ -221,6 +221,25 @@ variables:
       {% endfor %}
     {% endif %}
     {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
+  neutral_targets: >-
+    {% set ns = namespace(t1=0, t2=0, t3=0, t4=0) %}
+    {% if operating_mode == 'neutral' %}
+      {% for battery in batteries %}
+        {% set hold_power = battery.current_discharge | float(0) - battery.current_charge | float(0) %}
+        {% set hold_power = [hold_power, battery.max_discharge | float(0)] | min %}
+        {% set hold_power = [hold_power, 0 - (battery.max_charge | float(0))] | max %}
+        {% if battery.slot == 1 %}
+          {% set ns.t1 = hold_power | round(0) %}
+        {% elif battery.slot == 2 %}
+          {% set ns.t2 = hold_power | round(0) %}
+        {% elif battery.slot == 3 %}
+          {% set ns.t3 = hold_power | round(0) %}
+        {% elif battery.slot == 4 %}
+          {% set ns.t4 = hold_power | round(0) %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
 
   discharge_target_1: "{{ discharge_targets['1'] | float(0) }}"
   discharge_target_2: "{{ discharge_targets['2'] | float(0) }}"
@@ -231,6 +250,10 @@ variables:
   charge_target_2: "{{ charge_targets['2'] | float(0) }}"
   charge_target_3: "{{ charge_targets['3'] | float(0) }}"
   charge_target_4: "{{ charge_targets['4'] | float(0) }}"
+  neutral_target_1: "{{ neutral_targets['1'] | float(0) }}"
+  neutral_target_2: "{{ neutral_targets['2'] | float(0) }}"
+  neutral_target_3: "{{ neutral_targets['3'] | float(0) }}"
+  neutral_target_4: "{{ neutral_targets['4'] | float(0) }}"
 
   [[generated.command_vars]]
 
