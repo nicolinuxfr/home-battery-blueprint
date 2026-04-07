@@ -188,6 +188,7 @@ slot___SLOT___effective_balance_power: >-
   {% set discharge_gap = current_target - (slot___SLOT___actual_discharge_w | float(0)) %}
   {% set charge_gap = (0 - current_target) - (slot___SLOT___actual_charge_w | float(0)) %}
   {% if current_target > 0
+        and not (battery___SLOT___priority_discharge | bool)
         and slot___SLOT___actual_power_fresh | bool
         and slot___SLOT___target_age_s | float(0) >= slot___SLOT___response_grace_s | float(0)
         and discharge_gap > 50 %}

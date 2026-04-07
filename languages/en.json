@@ -46,7 +46,7 @@
   "input.battery.target_power_entity.name": "Target power entity",
   "input.battery.target_power_entity.description": "The `number` or `input_number` entity written by the blueprint. The target is signed in watts: positive for discharge, negative for charge, `0` for stop. If this battery should charge, the selected entity must accept negative values.",
   "input.battery.actual_power_sensor.name": "Actual power sensor",
-  "input.battery.actual_power_sensor.description": "Optional power sensor that reports the battery's real output in watts. The blueprint only uses it as a delayed secondary correction when the sensor stays fresh and the battery keeps delivering materially less power than its active target after the response grace period. It is not used as the primary allocation source.",
+  "input.battery.actual_power_sensor.description": "Optional power sensor that reports the battery's real output in watts. The blueprint only uses it as a delayed secondary correction when the sensor stays fresh and a non-priority battery keeps delivering materially less power than its active target after the response grace period. It is not used as the primary allocation source, and it never trims a priority battery during discharge.",
   "input.battery.discharge_actions.name": "Discharge actions",
   "input.battery.discharge_actions.description": "Optional custom actions executed when this battery should actively discharge. They run on every active discharge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions.",
   "input.battery.charge_actions.name": "Charge actions",

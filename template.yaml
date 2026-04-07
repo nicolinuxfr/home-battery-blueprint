@@ -73,7 +73,9 @@ variables:
   # Rebuild the underlying house demand from the net house meter plus the
   # effective managed battery contribution. Signed targets stay primary, while
   # optional actual-power sensors can only trim that contribution later as a
-  # secondary correction if a battery keeps under-delivering after its grace period.
+  # secondary correction if a non-priority battery keeps under-delivering after
+  # its grace period. Priority discharge batteries always keep their signed
+  # target as the effective contribution during discharge allocation.
   managed_battery_power_w: >-
     {{
       (slot_1_effective_balance_power | float(0))
