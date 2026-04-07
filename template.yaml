@@ -48,9 +48,6 @@ variables:
 
   [[generated.slot_bindings]]
 
-  automation_last_triggered_ts: >-
-    {% set last = this.attributes.last_triggered %}
-    {{ as_timestamp(last, 0) if last is not none else 0 }}
   gate_blocked: >-
     {% set blockers = expand(blocking_entities) %}
     {{ blockers | selectattr('state', 'ne', 'off') | list | count > 0 }}
@@ -81,6 +78,10 @@ variables:
     {% set ns = namespace(errors=[]) %}
     [[generated.slot_validation_lines]]
     {{ ns.errors }}
+
+  # Cooldown state must be available before building the battery list so
+  # allocation can reserve locked output and redistribute only the remainder.
+  [[generated.cooldown_vars]]
 
   batteries: >-
     {% set ns = namespace(items=[]) %}
@@ -133,18 +134,36 @@ variables:
     {% set ns = namespace(remaining=import_need_w | float(0), t1=0, t2=0, t3=0, t4=0) %}
     {% if operating_mode == 'discharge' %}
       {% for battery in batteries %}
-        {% set allocation = [battery.max_discharge, ns.remaining] | min %}
-        {% set allocation = [allocation, 0] | max %}
-        {% if battery.slot == 1 %}
-          {% set ns.t1 = allocation | round(0) %}
-        {% elif battery.slot == 2 %}
-          {% set ns.t2 = allocation | round(0) %}
-        {% elif battery.slot == 3 %}
-          {% set ns.t3 = allocation | round(0) %}
-        {% elif battery.slot == 4 %}
-          {% set ns.t4 = allocation | round(0) %}
+        {% if battery.discharge_locked %}
+          {% set allocation = [battery.current_discharge, battery.max_discharge] | min %}
+          {% set allocation = [allocation, 0] | max %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = allocation | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = allocation | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = allocation | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = allocation | round(0) %}
+          {% endif %}
+          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
         {% endif %}
-        {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+      {% endfor %}
+      {% for battery in batteries %}
+        {% if not battery.discharge_locked %}
+          {% set allocation = [battery.max_discharge, ns.remaining] | min %}
+          {% set allocation = [allocation, 0] | max %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = allocation | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = allocation | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = allocation | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = allocation | round(0) %}
+          {% endif %}
+          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+        {% endif %}
       {% endfor %}
     {% endif %}
     {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
@@ -153,18 +172,36 @@ variables:
     {% set ns = namespace(remaining=export_surplus_w | float(0), t1=0, t2=0, t3=0, t4=0) %}
     {% if operating_mode == 'charge' %}
       {% for battery in batteries %}
-        {% set allocation = [battery.max_charge, ns.remaining] | min %}
-        {% set allocation = [allocation, 0] | max %}
-        {% if battery.slot == 1 %}
-          {% set ns.t1 = allocation | round(0) %}
-        {% elif battery.slot == 2 %}
-          {% set ns.t2 = allocation | round(0) %}
-        {% elif battery.slot == 3 %}
-          {% set ns.t3 = allocation | round(0) %}
-        {% elif battery.slot == 4 %}
-          {% set ns.t4 = allocation | round(0) %}
+        {% if battery.charge_locked %}
+          {% set allocation = [battery.current_charge, battery.max_charge] | min %}
+          {% set allocation = [allocation, 0] | max %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = allocation | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = allocation | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = allocation | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = allocation | round(0) %}
+          {% endif %}
+          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
         {% endif %}
-        {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+      {% endfor %}
+      {% for battery in batteries %}
+        {% if not battery.charge_locked %}
+          {% set allocation = [battery.max_charge, ns.remaining] | min %}
+          {% set allocation = [allocation, 0] | max %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = allocation | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = allocation | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = allocation | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = allocation | round(0) %}
+          {% endif %}
+          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+        {% endif %}
       {% endfor %}
     {% endif %}
     {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
@@ -178,8 +215,6 @@ variables:
   charge_target_2: "{{ charge_targets['2'] | float(0) }}"
   charge_target_3: "{{ charge_targets['3'] | float(0) }}"
   charge_target_4: "{{ charge_targets['4'] | float(0) }}"
-
-  [[generated.cooldown_vars]]
 
   [[generated.command_vars]]
 

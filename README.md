@@ -25,7 +25,7 @@ For each battery slot:
 - `Maximum discharge power` and `Maximum charge power`: manual limits used by the allocator.
 - `Priority on discharge`: prioritized batteries discharge first; opportunistic charging prefers non-priority batteries first.
 - `Target power entity`: the `number` or `input_number` entity written by the blueprint. The target is signed: positive for discharge, negative for charge, `0` for stop. If charging is enabled, the selected entity must accept negative values.
-- `Command cooldown`: per-battery anti-spam delay for active target updates. Set it to `0` to disable it. Writing `0` and flipping the sign still happen immediately so the blueprint can stop or reverse a battery without waiting.
+- `Command cooldown`: per-battery anti-spam delay for active target updates. Set it to `0` to disable it. Writing `0` and flipping the sign still happen immediately so the blueprint can stop or reverse a battery without waiting. While one battery is cooling down, the allocator keeps its current active target and redistributes only the remaining demand or export surplus to the other batteries.
 - `Discharge actions` and `Charge actions`: optional hooks executed on every active update in the matching direction. They receive runtime variables such as `battery_slot`, `battery_soc`, `target_power_w`, `target_discharge_w`, `target_charge_w`, `house_power_w` and `export_surplus_w`.
 
 Zendure example:
@@ -41,7 +41,7 @@ Zendure example:
 - During discharge it allocates `max(house_power, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
 - During opportunistic charging it looks for real export, requires at least one battery at `99%` or above, and then fills charge-capable batteries from the lowest state of charge upward, avoiding discharge-priority batteries until needed.
 - A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
-- The target written by the blueprint is signed: positive for discharge, negative for charge, `0` for neutral. Writing `0`, reacting to an invalid sensor, honoring a blocking entity, or flipping the sign all happen immediately without waiting for the cooldown.
+- The target written by the blueprint is signed: positive for discharge, negative for charge, `0` for neutral. Writing `0`, reacting to an invalid sensor, honoring a blocking entity, or flipping the sign all happen immediately without waiting for the cooldown. During an active cooldown, the blueprint reserves the already-commanded power on that battery and reallocates only the remaining unmet load or export to the other batteries.
 - Validation now runs before any per-battery write or custom action. Every non-zero command is rechecked against the current blocking entities right before execution, and a blocked `0` write is allowed only on the blocker state change itself.
 - Optional charge and discharge actions only run while the battery is active in the matching direction. They are useful for integrations that still need a `select`, an auxiliary service call, or a helper-to-vendor translation layer.
 - Internal automation steps now carry explicit names so Home Assistant traces show per-battery target writes, charge/discharge hooks, and validation stops more clearly during debugging.

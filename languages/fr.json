@@ -42,7 +42,7 @@
   "input.battery.priority_discharge.name": "Prioritaire en décharge",
   "input.battery.priority_discharge.description": "Les batteries prioritaires sont vidées en premier, triées par pourcentage de charge. Les autres viennent ensuite, elles aussi triées par pourcentage.",
   "input.battery.cooldown_seconds.name": "Cooldown de commande",
-  "input.battery.cooldown_seconds.description": "Délai minimal entre deux mises à jour actives de consigne pour cette batterie. Mets 0 pour le désactiver. Un passage à `0` ou un changement de signe restent immédiats pour forcer un arrêt ou une inversion de mode sans attendre.",
+  "input.battery.cooldown_seconds.description": "Délai minimal entre deux mises à jour actives de consigne pour cette batterie. Mets 0 pour le désactiver. Un passage à `0` ou un changement de signe restent immédiats pour forcer un arrêt ou une inversion de mode sans attendre. Pendant le cooldown, le blueprint conserve la consigne active de cette batterie et ne redistribue aux autres batteries que le reliquat de demande maison ou de surplus exporté.",
   "input.battery.target_power_entity.name": "Entité de consigne de puissance",
   "input.battery.target_power_entity.description": "Entité `number` ou `input_number` écrite par le blueprint. La consigne est signée en watts : positive pour décharger, négative pour charger, `0` pour s'arrêter. Si la batterie doit charger, l'entité choisie doit accepter les valeurs négatives.",
   "input.battery.discharge_actions.name": "Actions de décharge",

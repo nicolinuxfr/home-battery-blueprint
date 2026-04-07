@@ -42,7 +42,7 @@
   "input.battery.priority_discharge.name": "Priority on discharge",
   "input.battery.priority_discharge.description": "Prioritized batteries are discharged first, ordered by their state of charge. Non-priority batteries come afterwards, also ordered by state of charge.",
   "input.battery.cooldown_seconds.name": "Command cooldown",
-  "input.battery.cooldown_seconds.description": "Minimum delay between two active target updates for this battery. Set to 0 to disable it. Writing `0` or flipping the sign still happens immediately so the blueprint can stop or reverse a battery without waiting.",
+  "input.battery.cooldown_seconds.description": "Minimum delay between two active target updates for this battery. Set to 0 to disable it. Writing `0` or flipping the sign still happens immediately so the blueprint can stop or reverse a battery without waiting. While a battery is cooling down, the blueprint keeps its current active target and redistributes only the remaining house demand or export surplus to the other batteries.",
   "input.battery.target_power_entity.name": "Target power entity",
   "input.battery.target_power_entity.description": "The `number` or `input_number` entity written by the blueprint. The target is signed in watts: positive for discharge, negative for charge, `0` for stop. If this battery should charge, the selected entity must accept negative values.",
   "input.battery.discharge_actions.name": "Discharge actions",

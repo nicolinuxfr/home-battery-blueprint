@@ -112,6 +112,13 @@ slot___SLOT___target_power_state: >-
   {% else %}
     0
   {% endif %}
+slot___SLOT___target_last_changed_ts: >-
+  {% if slot___SLOT___target_entity_configured %}
+    {% set target_state = states[battery___SLOT___target_power_entity] %}
+    {{ as_timestamp(target_state.last_changed, 0) if target_state is not none else 0 }}
+  {% else %}
+    0
+  {% endif %}
 slot___SLOT___current_target_w: >-
   {% if slot___SLOT___target_power_state in ['unknown', 'unavailable', 'none', ''] %}
     0
@@ -155,7 +162,20 @@ SLOT_VALIDATION_TEMPLATE = """
 
 SLOT_BATTERIES_TEMPLATE = """
 {% if slot___SLOT___used %}
-  {% set ns.items = ns.items + [{'slot': __SLOT__, 'soc': slot___SLOT___soc | float(0), 'priority': battery___SLOT___priority_discharge | bool, 'max_discharge': battery___SLOT___max_discharge_w | float(0), 'max_charge': battery___SLOT___max_charge_w | float(0), 'can_discharge': slot___SLOT___can_discharge | bool, 'can_charge': slot___SLOT___can_charge | bool}] %}
+  {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% set ns.items = ns.items + [{
+    'slot': __SLOT__,
+    'soc': slot___SLOT___soc | float(0),
+    'priority': battery___SLOT___priority_discharge | bool,
+    'max_discharge': battery___SLOT___max_discharge_w | float(0),
+    'max_charge': battery___SLOT___max_charge_w | float(0),
+    'can_discharge': slot___SLOT___can_discharge | bool,
+    'can_charge': slot___SLOT___can_charge | bool,
+    'current_discharge': [current_target, 0] | max,
+    'current_charge': [0 - current_target, 0] | max,
+    'discharge_locked': slot___SLOT___can_discharge and current_target > 0 and not (discharge_cooldown_ok___SLOT__ | bool),
+    'charge_locked': slot___SLOT___can_charge and current_target < 0 and not (charge_cooldown_ok___SLOT__ | bool)
+  }] %}
 {% endif %}
 """.strip()
 
@@ -167,7 +187,7 @@ discharge_cooldown_ok___SLOT__: >-
   {% elif battery___SLOT___cooldown_seconds | float(0) <= 0 %}
     true
   {% else %}
-    {{ automation_last_triggered_ts == 0 or as_timestamp(now()) - automation_last_triggered_ts >= battery___SLOT___cooldown_seconds | float(0) }}
+    {{ slot___SLOT___target_last_changed_ts == 0 or as_timestamp(now()) - slot___SLOT___target_last_changed_ts >= battery___SLOT___cooldown_seconds | float(0) }}
   {% endif %}
 charge_cooldown_ok___SLOT__: >-
   {% if not slot___SLOT___can_charge %}
@@ -175,7 +195,7 @@ charge_cooldown_ok___SLOT__: >-
   {% elif battery___SLOT___cooldown_seconds | float(0) <= 0 %}
     true
   {% else %}
-    {{ automation_last_triggered_ts == 0 or as_timestamp(now()) - automation_last_triggered_ts >= battery___SLOT___cooldown_seconds | float(0) }}
+    {{ slot___SLOT___target_last_changed_ts == 0 or as_timestamp(now()) - slot___SLOT___target_last_changed_ts >= battery___SLOT___cooldown_seconds | float(0) }}
   {% endif %}
 """.strip()
 
