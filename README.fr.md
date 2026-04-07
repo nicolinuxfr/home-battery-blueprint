@@ -39,6 +39,7 @@ Exemple Zendure :
 ## Fonctionnement
 
 - À chaque run, le blueprint choisit un seul mode exclusif : `discharge`, `charge` ou `neutral`.
+- Les runs déclenchés par le capteur de puissance maison ignorent maintenant les mises à jour qui ne changent que les attributs, et ils s'arrêtent aussi très tôt si la variation numérique reste sous un seuil interne de `10 W`. Les entités de blocage, elles, continuent à déclencher immédiatement sans passer par ce seuil.
 - En décharge, il répartit `max(house_power, 0)` entre les batteries, en privilégiant d'abord les batteries marquées prioritaires puis en triant par pourcentage de charge décroissant.
 - L'allocateur reconstruit la demande maison sous-jacente à partir du capteur maison net en réajoutant les consignes signées déjà actives sur les batteries gérées. Cela évite que le capteur maison annule artificiellement le travail des batteries et limite fortement les oscillations dues aux télémétries vendor lentes.
 - Quand un capteur optionnel de puissance réelle est configuré et reste frais, le blueprint peut l'utiliser comme correction secondaire différée après le délai de réponse pour détecter qu'une batterie non prioritaire délivre durablement nettement moins que sa consigne active. Cette correction ne remplace jamais la boucle principale basée sur la consigne et le compteur maison. En décharge, elle ne réduit jamais une batterie prioritaire, mais elle peut quand même augmenter sa contribution effective si la télémétrie montre qu'elle délivre déjà plus que sa consigne signée.

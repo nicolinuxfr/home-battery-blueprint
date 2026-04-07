@@ -38,6 +38,7 @@ mode: restart
 triggers:
   - trigger: state
     entity_id: !input house_power_sensor
+    not_to: null
   - trigger: state
     entity_id: !input blocking_entities
 
@@ -46,6 +47,7 @@ variables:
   blocking_entities: !input blocking_entities
   command_deadband_w: 60
   release_deadband_w: 80
+  minimum_trigger_delta_w: 10
 
   [[generated.slot_bindings]]
 
@@ -59,11 +61,50 @@ variables:
       
     {% endif %}
   triggered_by_blocking_entity: "{{ trigger_entity_id in blocking_entities }}"
+  triggered_by_house_power_sensor: "{{ trigger_entity_id == house_power_sensor }}"
   blocking_trigger_entered_blocked: >-
     {% if triggered_by_blocking_entity and trigger is defined and trigger.to_state is not none %}
       {{ trigger.to_state.state != 'off' }}
     {% else %}
       false
+    {% endif %}
+  trigger_from_house_power_w: >-
+    {% if triggered_by_house_power_sensor and trigger is defined and trigger.from_state is not none %}
+      {% set value = trigger.from_state.state %}
+      {% if value not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ value | float(0) }}
+      {% else %}
+        none
+      {% endif %}
+    {% else %}
+      none
+    {% endif %}
+  trigger_to_house_power_w: >-
+    {% if triggered_by_house_power_sensor and trigger is defined and trigger.to_state is not none %}
+      {% set value = trigger.to_state.state %}
+      {% if value not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ value | float(0) }}
+      {% else %}
+        none
+      {% endif %}
+    {% else %}
+      none
+    {% endif %}
+  house_power_trigger_delta_w: >-
+    {% if trigger_from_house_power_w is not none and trigger_to_house_power_w is not none %}
+      {{ ((trigger_to_house_power_w | float(0)) - (trigger_from_house_power_w | float(0))) | abs }}
+    {% else %}
+      none
+    {% endif %}
+  should_skip_small_house_power_delta: >-
+    {% if not triggered_by_house_power_sensor %}
+      false
+    {% elif minimum_trigger_delta_w | float(0) <= 0 %}
+      false
+    {% elif house_power_trigger_delta_w is none %}
+      false
+    {% else %}
+      {{ house_power_trigger_delta_w | float(0) < minimum_trigger_delta_w | float(0) }}
     {% endif %}
   house_power_state: "{{ states(house_power_sensor) }}"
   house_power_valid: "{{ house_power_state not in ['unknown', 'unavailable', 'none', ''] }}"
@@ -321,6 +362,16 @@ variables:
 actions:
   - alias: "[[trace.validation_gate]]"
     choose:
+      - alias: "[[trace.small_delta_branch]]"
+        conditions:
+          - condition: template
+            value_template: "{{ should_skip_small_house_power_delta }}"
+        sequence:
+          - alias: "[[trace.stop_small_delta]]"
+            stop: >-
+              [[message.small_delta_skipped]]
+              {{ house_power_trigger_delta_w | float(0) | round(1) }} W < {{ minimum_trigger_delta_w | float(0) | round(1) }} W.
+
       - alias: "[[trace.invalid_config_branch]]"
         conditions:
           - condition: template

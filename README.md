@@ -39,6 +39,7 @@ Zendure example:
 ## How It Works
 
 - The blueprint chooses one exclusive operating mode per run: `discharge`, `charge`, or `neutral`.
+- Runs triggered by the house power sensor now ignore attribute-only updates, and they also stop early when the numeric delta stays below an internal `10 W` threshold. Blocking entities still bypass that threshold and keep triggering immediately.
 - During discharge it allocates `max(house_power, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
 - The allocator rebuilds the underlying house demand from the net house meter by adding back the signed targets already active on managed batteries. This prevents the house sensor from cancelling out the batteries' own work and avoids depending on slow vendor telemetry.
 - When an optional actual power sensor is configured and stays fresh, the blueprint can use it as a delayed secondary correction after the response grace period to notice that a non-priority battery is materially under-delivering compared with its active target. This correction never replaces the primary target-plus-house-meter control loop. During discharge it never trims a priority battery down, but it can still raise that priority battery's effective contribution when telemetry shows it is already delivering more than its signed target.
