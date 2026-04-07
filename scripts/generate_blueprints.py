@@ -289,6 +289,7 @@ SLOT_ACTION_TEMPLATE = """
               sequence:
                 - alias: "[[slot.__SLOT__]]: [[trace.write_number_target_suffix]]"
                   action: number.set_value
+                  continue_on_error: true
                   target:
                     entity_id: "{{ battery___SLOT___target_power_entity }}"
                   data:
@@ -299,6 +300,7 @@ SLOT_ACTION_TEMPLATE = """
               sequence:
                 - alias: "[[slot.__SLOT__]]: [[trace.write_input_number_target_suffix]]"
                   action: input_number.set_value
+                  continue_on_error: true
                   target:
                     entity_id: "{{ battery___SLOT___target_power_entity }}"
                   data:
