@@ -17,7 +17,6 @@ Raw import URL:
 ## Configuration
 
 - `House power sensor`: the main sensor used by the allocator. The selector only shows power sensors, but Home Assistant cannot filter the unit here, so you should still pick a signed sensor in `W` with `import > 0` and `export < 0`.
-- `House power sensor already smoothed`: enable this when the selected house power sensor already exposes a moving average or another filtered value that should be trusted as-is. In that case the blueprint uses the sensor value directly instead of rebuilding the underlying house demand from the net house meter plus active battery targets.
 - `Blocking entities`: optional list of `binary_sensor` or `input_boolean` entities. The blueprint runs only if every selected entity is `off`. If one becomes `on`, `unknown`, or `unavailable`, the blueprint may write `0` once to neutralize managed batteries on that exact blocker state change, then it stops all custom actions and ignores later blocked runs until every blocker is back to `off`.
 
 For each battery slot:
@@ -40,8 +39,7 @@ Zendure example:
 
 - The blueprint chooses one exclusive operating mode per run: `discharge`, `charge`, or `neutral`.
 - During discharge it allocates `max(house_power, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
-- If `House power sensor already smoothed` is disabled, the allocator rebuilds the underlying house demand from the net house meter by adding back the signed targets already active on managed batteries. This prevents the house sensor from cancelling out the batteries' own work and avoids depending on slow vendor telemetry.
-- If `House power sensor already smoothed` is enabled, the allocator trusts the selected sensor value as-is and skips that reconstruction step.
+- The allocator rebuilds the underlying house demand from the net house meter by adding back the signed targets already active on managed batteries. This prevents the house sensor from cancelling out the batteries' own work and avoids depending on slow vendor telemetry.
 - During cooldown or telemetry latency, the blueprint therefore keeps reasoning from the active target and the observed net house consumption instead of waiting for slow or irregular battery telemetry to catch up.
 - During opportunistic charging it looks for real export, requires at least one battery at `99%` or above, and then fills charge-capable batteries from the lowest state of charge upward, avoiding discharge-priority batteries until needed.
 - A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
@@ -56,7 +54,7 @@ Zendure example:
 
 ## Known Limitations
 
-- The blueprint does not create a moving-average helper. If you want a smoothed house signal, provide an already filtered sensor as input and enable `House power sensor already smoothed`.
+- The blueprint does not create a moving-average helper. If you want a smoothed house signal, provide an already filtered sensor as input.
 - If a battery should charge, the chosen target entity must accept negative values. Otherwise, use an intermediate signed helper.
 - Optional actions do not run in neutral. If your integration needs an explicit translation of `0`, use a signed helper that the integration or another automation consumes.
 - The blueprint metadata and documentation point to `nicolinuxfr/home-battery-blueprint`.

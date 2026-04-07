@@ -17,7 +17,6 @@ URL brute d'import :
 ## Configuration
 
 - `Capteur de puissance maison` : capteur principal utilisé par l'algorithme. Le sélecteur n'affiche que les capteurs de puissance, mais Home Assistant ne permet pas de filtrer l'unité ici, donc il faut toujours choisir un capteur signé en `W` avec `import > 0` et `export < 0`.
-- `Capteur maison déjà lissé` : active cette option si le capteur de puissance sélectionné expose déjà une moyenne glissante ou une autre valeur filtrée à prendre telle quelle. Dans ce cas, le blueprint utilise directement cette valeur au lieu de reconstruire la demande maison sous-jacente à partir du compteur net et des consignes batteries déjà actives.
 - `Entités de blocage` : liste optionnelle d'entités `binary_sensor` ou `input_boolean`. Le blueprint tourne seulement si toutes les entités sélectionnées sont à `off`. Si l'une passe à `on`, `unknown` ou `unavailable`, le blueprint peut écrire `0` une seule fois pour neutraliser les batteries gérées sur ce changement d'état précis, puis il arrête toutes les actions personnalisées et ignore les runs bloqués suivants tant que tous les bloqueurs ne sont pas revenus à `off`.
 
 Pour chaque slot batterie :
@@ -40,8 +39,7 @@ Exemple Zendure :
 
 - À chaque run, le blueprint choisit un seul mode exclusif : `discharge`, `charge` ou `neutral`.
 - En décharge, il répartit `max(house_power, 0)` entre les batteries, en privilégiant d'abord les batteries marquées prioritaires puis en triant par pourcentage de charge décroissant.
-- Si `Capteur maison déjà lissé` est désactivé, l'allocateur reconstruit la demande maison sous-jacente à partir du capteur maison net en réajoutant les consignes signées déjà actives sur les batteries gérées. Cela évite que le capteur maison annule artificiellement le travail des batteries et limite fortement les oscillations dues aux télémétries vendor lentes.
-- Si `Capteur maison déjà lissé` est activé, l'allocateur fait confiance à la valeur du capteur sélectionné telle quelle et saute cette étape de reconstruction.
+- L'allocateur reconstruit la demande maison sous-jacente à partir du capteur maison net en réajoutant les consignes signées déjà actives sur les batteries gérées. Cela évite que le capteur maison annule artificiellement le travail des batteries et limite fortement les oscillations dues aux télémétries vendor lentes.
 - Pendant un cooldown ou une phase de latence, le blueprint continue de raisonner à partir de la consigne déjà active et de l'effet observé sur la consommation nette de la maison, sans dépendre d'une télémétrie batterie lente ou irrégulière.
 - En charge opportuniste, il détecte un export réel, exige qu'au moins une batterie soit à `99 %` ou plus, puis remplit les batteries chargeables du SOC le plus bas vers le plus haut, en évitant autant que possible les batteries prioritaires en décharge.
 - Une bande morte interne fixe de `50 W` filtre les très petits écarts et évite les écritures inutiles ou les actions répétées. Elle remplace les anciens réglages visibles `Marge de décharge` et `Delta minimal de commande`.
@@ -56,7 +54,7 @@ Exemple Zendure :
 
 ## Limites connues
 
-- Le blueprint ne crée pas lui-même de capteur de moyenne glissante. Si tu veux un signal lissé, fournis en entrée un capteur déjà filtré et active `Capteur maison déjà lissé`.
+- Le blueprint ne crée pas lui-même de capteur de moyenne glissante. Si tu veux un signal lissé, fournis en entrée un capteur déjà filtré.
 - Si une batterie doit charger, l'entité de consigne choisie doit accepter les valeurs négatives. Sinon, utilise un helper signé intermédiaire.
 - Les actions optionnelles ne tournent pas en neutre. Si ton intégration a besoin d'une traduction explicite du `0`, passe par un helper signé que l'intégration ou une autre automatisation consomme.
 - Les métadonnées du blueprint et la documentation pointent vers `nicolinuxfr/home-battery-blueprint`.

@@ -31,8 +31,6 @@
   "slot.4": "Battery 4",
   "input.house_power_sensor.name": "House power sensor",
   "input.house_power_sensor.description": "Main house power sensor. This selector only shows power sensors. Use a signed sensor in watts with positive values for import and negative values for export.",
-  "input.house_power_is_smoothed.name": "House power sensor already smoothed",
-  "input.house_power_is_smoothed.description": "Enable this when the selected house power sensor already exposes a moving average or another filtered value that should be trusted as-is. When enabled, the blueprint uses that sensor value directly and does not rebuild the underlying house demand by adding back active managed battery targets.",
   "input.blocking_entities.name": "Blocking entities",
   "input.blocking_entities.description": "Optional entities that must all stay off for the blueprint to run. If any selected entity is on, unknown, or unavailable, the blueprint can force every managed battery back to neutral only when that blocking entity changed state, then it stops all custom charge and discharge actions and ignores further blocked runs until every blocker is back to off.",
   "input.battery.soc_sensor.name": "State of charge sensor",
