@@ -251,7 +251,10 @@ should_write_target_power___SLOT__: >-
     {{ desired_target_sign___SLOT__ | int(0) == 0
        and desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0)
        and blocking_trigger_entered_blocked }}
-  {% elif desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0) %}
+  {% elif desired_target_sign___SLOT__ | int(0) == 0 %}
+    {{ slot___SLOT___current_target_sign | int(0) != 0 }}
+  {% elif desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0)
+        and slot___SLOT___current_target_sign | int(0) != 0 %}
     true
   {% elif signed_target___SLOT__ | float(0) > 0 %}
     {{ discharge_cooldown_ok___SLOT__ }}
