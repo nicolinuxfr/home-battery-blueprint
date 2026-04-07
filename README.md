@@ -41,6 +41,7 @@ Zendure example:
 - The blueprint chooses one exclusive operating mode per run: `discharge`, `charge`, or `neutral`.
 - During discharge it allocates `max(house_power, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
 - If a battery is still in cooldown, the allocator now reserves only the power it is measurably delivering when an actual power sensor is configured. Without that sensor, it falls back to the last commanded target.
+- If an actual power sensor stays near `0 W` for about 20 seconds after a non-zero command, the blueprint temporarily stops allocating new load to that battery and lets another battery take over.
 - During opportunistic charging it looks for real export, requires at least one battery at `99%` or above, and then fills charge-capable batteries from the lowest state of charge upward, avoiding discharge-priority batteries until needed.
 - A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
 - The target written by the blueprint is signed: positive for discharge, negative for charge, `0` for neutral. Writing `0`, reacting to an invalid sensor, honoring a blocking entity, or flipping the sign all happen immediately without waiting for the cooldown. During an active cooldown, the blueprint reserves the already-commanded power on that battery and reallocates only the remaining unmet load or export to the other batteries.

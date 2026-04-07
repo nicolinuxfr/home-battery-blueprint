@@ -45,6 +45,7 @@ variables:
   house_power_sensor: !input house_power_sensor
   blocking_entities: !input blocking_entities
   command_deadband_w: 50
+  command_response_timeout_s: 20
 
   [[generated.slot_bindings]]
 

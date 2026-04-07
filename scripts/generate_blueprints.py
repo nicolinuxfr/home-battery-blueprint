@@ -141,6 +141,12 @@ slot___SLOT___target_last_changed_ts: >-
   {% else %}
     0
   {% endif %}
+slot___SLOT___target_age_s: >-
+  {% if slot___SLOT___target_last_changed_ts | float(0) > 0 %}
+    {{ [as_timestamp(now()) - (slot___SLOT___target_last_changed_ts | float(0)), 0] | max }}
+  {% else %}
+    0
+  {% endif %}
 slot___SLOT___current_target_w: >-
   {% if slot___SLOT___target_power_state in ['unknown', 'unavailable', 'none', ''] %}
     0
@@ -157,8 +163,22 @@ slot___SLOT___current_target_sign: >-
   {% endif %}
 slot___SLOT___has_discharge_actions: "{{ battery___SLOT___discharge_actions | count > 0 }}"
 slot___SLOT___has_charge_actions: "{{ battery___SLOT___charge_actions | count > 0 }}"
-slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 }}"
-slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 }}"
+slot___SLOT___discharge_delivery_stalled: >-
+  {{
+    slot___SLOT___actual_power_sensor_configured
+    and slot___SLOT___current_target_w | float(0) >= command_deadband_w
+    and slot___SLOT___actual_power | float(0) < command_deadband_w
+    and slot___SLOT___target_age_s | float(0) >= command_response_timeout_s
+  }}
+slot___SLOT___charge_delivery_stalled: >-
+  {{
+    slot___SLOT___actual_power_sensor_configured
+    and slot___SLOT___current_target_w | float(0) <= (0 - command_deadband_w)
+    and slot___SLOT___actual_power | float(0) > (0 - command_deadband_w)
+    and slot___SLOT___target_age_s | float(0) >= command_response_timeout_s
+  }}
+slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 and not (slot___SLOT___discharge_delivery_stalled | bool) }}"
+slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 and not (slot___SLOT___charge_delivery_stalled | bool) }}"
 """.strip()
 
 
