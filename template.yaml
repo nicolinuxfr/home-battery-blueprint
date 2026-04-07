@@ -45,7 +45,6 @@ variables:
   house_power_sensor: !input house_power_sensor
   blocking_entities: !input blocking_entities
   command_deadband_w: 50
-  command_response_timeout_s: 20
 
   [[generated.slot_bindings]]
 
@@ -75,10 +74,10 @@ variables:
   # batteries are already delivering or subtracting what they are currently absorbing.
   managed_battery_power_w: >-
     {{
-      (slot_1_actual_power | float(0))
-      + (slot_2_actual_power | float(0))
-      + (slot_3_actual_power | float(0))
-      + (slot_4_actual_power | float(0))
+      (slot_1_effective_balance_power | float(0))
+      + (slot_2_effective_balance_power | float(0))
+      + (slot_3_effective_balance_power | float(0))
+      + (slot_4_effective_balance_power | float(0))
     }}
   adjusted_house_power_w: >-
     {% if house_power_valid %}
