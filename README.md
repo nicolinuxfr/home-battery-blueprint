@@ -22,6 +22,7 @@ Raw import URL:
 For each battery slot:
 
 - `State of charge sensor`: leaving it empty disables the slot. The selector only shows battery sensors that report a percentage. If you fill it, the slot must also expose a numeric target entity and at least one non-zero power limit.
+- `Actual battery power sensor`: optional but strongly recommended for integrations that rate-limit or lag behind commands. Use a signed power sensor in `W` with positive values while discharging and negative values while charging. During cooldown, the allocator uses this measured power instead of assuming the last target is really being delivered.
 - `Maximum discharge power` and `Maximum charge power`: manual limits used by the allocator.
 - `Priority on discharge`: prioritized batteries discharge first; opportunistic charging prefers non-priority batteries first.
 - `Target power entity`: the `number` or `input_number` entity written by the blueprint. The target is signed: positive for discharge, negative for charge, `0` for stop. If charging is enabled, the selected entity must accept negative values.
@@ -39,6 +40,7 @@ Zendure example:
 
 - The blueprint chooses one exclusive operating mode per run: `discharge`, `charge`, or `neutral`.
 - During discharge it allocates `max(house_power, 0)` across batteries, prioritizing flagged batteries first and then sorting by highest state of charge.
+- If a battery is still in cooldown, the allocator now reserves only the power it is measurably delivering when an actual power sensor is configured. Without that sensor, it falls back to the last commanded target.
 - During opportunistic charging it looks for real export, requires at least one battery at `99%` or above, and then fills charge-capable batteries from the lowest state of charge upward, avoiding discharge-priority batteries until needed.
 - A fixed internal `50 W` deadband filters tiny command changes and avoids pointless writes or action spam. This replaces the previous user-facing discharge margin and minimum delta knobs.
 - The target written by the blueprint is signed: positive for discharge, negative for charge, `0` for neutral. Writing `0`, reacting to an invalid sensor, honoring a blocking entity, or flipping the sign all happen immediately without waiting for the cooldown. During an active cooldown, the blueprint reserves the already-commanded power on that battery and reallocates only the remaining unmet load or export to the other batteries.

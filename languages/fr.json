@@ -35,6 +35,8 @@
   "input.blocking_entities.description": "Entités optionnelles qui doivent toutes rester à off pour que le blueprint tourne. Si une entité sélectionnée passe à on, unknown ou unavailable, le blueprint peut remettre toutes les batteries gérées à neutre uniquement sur ce changement d'état, puis il arrête toutes les actions personnalisées de charge et de décharge et ignore les runs bloqués suivants tant que tous les bloqueurs ne sont pas revenus à off.",
   "input.battery.soc_sensor.name": "Capteur d'état de charge",
   "input.battery.soc_sensor.description": "Laisse ce champ vide pour ignorer ce slot. Sinon, ce sélecteur n'affiche que les capteurs de batterie qui remontent un pourcentage de charge, et le capteur choisi active le slot. Un slot activé doit aussi exposer une entité numérique de consigne et au moins une limite de puissance non nulle.",
+  "input.battery.actual_power_sensor.name": "Capteur de puissance batterie réelle",
+  "input.battery.actual_power_sensor.description": "Capteur optionnel de puissance réelle de cette batterie en watts. Utilise un capteur signé avec des valeurs positives quand la batterie alimente la maison et négatives quand elle charge. Pendant le cooldown, l'allocateur utilise cette puissance mesurée au lieu de la dernière consigne demandée, ce qui permet à une autre batterie de reprendre si celle-ci ne délivre pas réellement de puissance.",
   "input.battery.max_discharge_w.name": "Puissance maximale de décharge",
   "input.battery.max_discharge_w.description": "Limite de décharge saisie manuellement et utilisée par l'algorithme d'allocation pour cette batterie.",
   "input.battery.max_charge_w.name": "Puissance maximale de charge",

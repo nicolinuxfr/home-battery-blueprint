@@ -26,6 +26,15 @@ battery___SLOT___section:
           filter:
             - domain: sensor
               device_class: battery
+    battery___SLOT___actual_power_sensor:
+      name: "[[input.battery.actual_power_sensor.name]]"
+      description: "[[input.battery.actual_power_sensor.description]]"
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: power
     battery___SLOT___max_discharge_w:
       name: "[[input.battery.max_discharge_w.name]]"
       description: "[[input.battery.max_discharge_w.description]]"
@@ -91,6 +100,7 @@ battery___SLOT___section:
 
 SLOT_BINDING_TEMPLATE = """
 battery___SLOT___soc_sensor: !input battery___SLOT___soc_sensor
+battery___SLOT___actual_power_sensor: !input battery___SLOT___actual_power_sensor
 battery___SLOT___max_discharge_w: !input battery___SLOT___max_discharge_w
 battery___SLOT___max_charge_w: !input battery___SLOT___max_charge_w
 battery___SLOT___priority_discharge: !input battery___SLOT___priority_discharge
@@ -104,7 +114,19 @@ battery___SLOT___charge_actions: !input battery___SLOT___charge_actions
 SLOT_STATE_TEMPLATE = """
 slot___SLOT___used: "{{ battery___SLOT___soc_sensor != '' }}"
 slot___SLOT___soc: "{{ states(battery___SLOT___soc_sensor) | float(0) if slot___SLOT___used else 0 }}"
-slot___SLOT___actual_power: "0"
+slot___SLOT___actual_power_sensor_configured: "{{ battery___SLOT___actual_power_sensor != '' }}"
+slot___SLOT___actual_power_state: >-
+  {% if slot___SLOT___actual_power_sensor_configured %}
+    {{ states(battery___SLOT___actual_power_sensor) }}
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___actual_power: >-
+  {% if slot___SLOT___actual_power_state in ['unknown', 'unavailable', 'none', ''] %}
+    0
+  {% else %}
+    {{ slot___SLOT___actual_power_state | float(0) }}
+  {% endif %}
 slot___SLOT___target_entity_configured: "{{ battery___SLOT___target_power_entity != '' }}"
 slot___SLOT___target_power_state: >-
   {% if slot___SLOT___target_entity_configured %}
@@ -163,6 +185,9 @@ SLOT_VALIDATION_TEMPLATE = """
 SLOT_BATTERIES_TEMPLATE = """
 {% if slot___SLOT___used %}
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% set actual_power = slot___SLOT___actual_power | float(0) %}
+  {% set reserved_discharge = [actual_power, 0] | max if slot___SLOT___actual_power_sensor_configured | bool else [current_target, 0] | max %}
+  {% set reserved_charge = [0 - actual_power, 0] | max if slot___SLOT___actual_power_sensor_configured | bool else [0 - current_target, 0] | max %}
   {% set ns.items = ns.items + [{
     'slot': __SLOT__,
     'soc': slot___SLOT___soc | float(0),
@@ -171,8 +196,8 @@ SLOT_BATTERIES_TEMPLATE = """
     'max_charge': battery___SLOT___max_charge_w | float(0),
     'can_discharge': slot___SLOT___can_discharge | bool,
     'can_charge': slot___SLOT___can_charge | bool,
-    'current_discharge': [current_target, 0] | max,
-    'current_charge': [0 - current_target, 0] | max,
+    'current_discharge': reserved_discharge,
+    'current_charge': reserved_charge,
     'discharge_locked': slot___SLOT___can_discharge and current_target > 0 and not (discharge_cooldown_ok___SLOT__ | bool),
     'charge_locked': slot___SLOT___can_charge and current_target < 0 and not (charge_cooldown_ok___SLOT__ | bool)
   }] %}

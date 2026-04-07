@@ -35,6 +35,8 @@
   "input.blocking_entities.description": "Optional entities that must all stay off for the blueprint to run. If any selected entity is on, unknown, or unavailable, the blueprint can force every managed battery back to neutral only when that blocking entity changed state, then it stops all custom charge and discharge actions and ignores further blocked runs until every blocker is back to off.",
   "input.battery.soc_sensor.name": "State of charge sensor",
   "input.battery.soc_sensor.description": "Leave empty to ignore this battery slot. Otherwise, this selector only shows battery sensors that report a charge percentage, and the chosen sensor enables the slot. An enabled slot must also expose a numeric target entity and at least one non-zero power limit.",
+  "input.battery.actual_power_sensor.name": "Actual battery power sensor",
+  "input.battery.actual_power_sensor.description": "Optional real power sensor for this battery in watts. Use a signed sensor with positive values while discharging to the house and negative values while charging. During cooldown, the allocator uses this measured power instead of the last commanded target so another battery can take over when this one is not actually delivering power.",
   "input.battery.max_discharge_w.name": "Maximum discharge power",
   "input.battery.max_discharge_w.description": "Manual discharge limit used by the allocator for this battery.",
   "input.battery.max_charge_w.name": "Maximum charge power",

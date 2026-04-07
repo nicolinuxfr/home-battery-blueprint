@@ -22,6 +22,7 @@ URL brute d'import :
 Pour chaque slot batterie :
 
 - `Capteur d'état de charge` : laisser vide désactive le slot. Le sélecteur n'affiche que les capteurs de batterie qui remontent un pourcentage. Si tu le renseignes, le slot doit aussi exposer une entité numérique de consigne et au moins une puissance max non nulle.
+- `Capteur de puissance batterie réelle` : optionnel mais fortement recommandé pour les intégrations qui limitent la fréquence des commandes ou appliquent les changements avec retard. Utilise un capteur signé en `W`, positif quand la batterie alimente la maison et négatif quand elle charge. Pendant le cooldown, l'allocateur utilise cette puissance mesurée au lieu de supposer que la dernière consigne est réellement fournie.
 - `Puissance maximale de décharge` et `Puissance maximale de charge` : limites manuelles utilisées par l'algorithme.
 - `Prioritaire en décharge` : les batteries prioritaires se vident d'abord ; la charge opportuniste préfère d'abord les batteries non prioritaires.
 - `Entité de consigne de puissance` : entité `number` ou `input_number` écrite par le blueprint. La consigne est signée : positive en décharge, négative en charge, `0` à l'arrêt. Si tu actives la charge, l'entité choisie doit accepter les valeurs négatives.
@@ -39,6 +40,7 @@ Exemple Zendure :
 
 - À chaque run, le blueprint choisit un seul mode exclusif : `discharge`, `charge` ou `neutral`.
 - En décharge, il répartit `max(house_power, 0)` entre les batteries, en privilégiant d'abord les batteries marquées prioritaires puis en triant par pourcentage de charge décroissant.
+- Si une batterie est encore en cooldown, l'allocateur ne réserve maintenant que la puissance qu'elle délivre réellement lorsqu'un capteur de puissance réelle est configuré. Sans ce capteur, il retombe sur la dernière consigne demandée.
 - En charge opportuniste, il détecte un export réel, exige qu'au moins une batterie soit à `99 %` ou plus, puis remplit les batteries chargeables du SOC le plus bas vers le plus haut, en évitant autant que possible les batteries prioritaires en décharge.
 - Une bande morte interne fixe de `50 W` filtre les très petits écarts et évite les écritures inutiles ou les actions répétées. Elle remplace les anciens réglages visibles `Marge de décharge` et `Delta minimal de commande`.
 - La consigne écrite par le blueprint est signée : positive en décharge, négative en charge, `0` en neutre. Un passage à `0`, un capteur invalide, un blocage actif ou une inversion de signe provoquent une écriture immédiate sans attendre le cooldown. Pendant un cooldown actif, le blueprint réserve désormais la puissance déjà commandée sur cette batterie et ne réalloue aux autres batteries que la charge ou le surplus restant.
