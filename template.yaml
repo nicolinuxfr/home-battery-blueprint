@@ -113,15 +113,10 @@ variables:
   [[generated.slot_state_vars]]
 
   # Rebuild the underlying house demand from the net house meter plus the
-  # effective managed battery contribution. Signed targets stay primary, while
-  # optional actual-power sensors can only trim that contribution later as a
-  # secondary correction if a non-priority battery keeps under-delivering after
-  # its grace period. Priority discharge batteries are never trimmed down by
-  # this correction, but fresh telemetry can still raise their effective
-  # contribution when they are already delivering more than their signed target.
-  # If a priority battery keeps commanding discharge but fresh telemetry shows
-  # it is no longer delivering materially above zero after its grace period, it
-  # stops being treated as priority until it actually contributes again.
+  # measured managed battery contribution when fresh telemetry is available.
+  # Allocation then keeps a separate temporary reservation of newly requested
+  # target power during each battery response grace period so a slow priority
+  # battery keeps ownership of the power it has just been asked to provide.
   managed_battery_power_w: >-
     {{
       (slot_1_effective_balance_power | float(0))
