@@ -568,9 +568,6 @@ def join_blocks(blocks: list[str]) -> str:
 def build_generated_values() -> dict[str, str]:
     discharge_count = " + ".join(f"slot_{slot}_can_discharge | int(0)" for slot in SLOTS)
     charge_count = " + ".join(f"slot_{slot}_can_charge | int(0)" for slot in SLOTS)
-    near_full_expr = " or ".join(
-        f"(slot_{slot}_used and slot_{slot}_soc >= 99)" for slot in SLOTS
-    )
 
     return {
         "generated.slot_inputs": join_blocks([slotize(SLOT_INPUT_TEMPLATE, slot) for slot in SLOTS]),
@@ -590,7 +587,6 @@ def build_generated_values() -> dict[str, str]:
             [
                 f'discharge_capable_count: "{{{{ {discharge_count} }}}}"',
                 f'charge_capable_count: "{{{{ {charge_count} }}}}"',
-                f'near_full_exists: "{{{{ {near_full_expr} }}}}"',
             ]
         ),
         "generated.cooldown_vars": join_blocks(

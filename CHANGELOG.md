@@ -1,6 +1,9 @@
 # Changelog
 
-## 2026.04
+## 2026.4.1
 
-- Initial project scaffold with i18n blueprint structure, build script, GitHub Actions workflow, and localized documentation.
-- Added a first automation blueprint skeleton for dual Anker Solarbank load management in dry-run mode.
+- Should export less energy.
+
+## 2026.4
+
+- Initial version.

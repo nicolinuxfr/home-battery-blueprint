@@ -183,7 +183,7 @@ variables:
       discharge
     {% elif hold_discharge_mode %}
       discharge_hold
-    {% elif export_surplus_w >= command_deadband_w and near_full_exists and charge_capable_count > 0 %}
+    {% elif export_surplus_w >= command_deadband_w and charge_capable_count > 0 %}
       charge
     {% elif hold_charge_mode %}
       charge_hold
