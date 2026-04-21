@@ -271,6 +271,7 @@ variables:
       assist_remaining=0,
       trim_remaining=discharge_export_guard_w | float(0),
       assist_source_cooldown=-1,
+      assist_headroom_priority_active=false,
       assist_used=0,
       assist_priority_slots=[],
       assist_helper_slots=[],
@@ -330,13 +331,19 @@ variables:
             {% set assist_gap = [desired_allocation - battery.actual_discharge, 0] | max %}
             {% set ns.assist_remaining = ns.assist_remaining + assist_gap %}
             {% set ns.assist_source_cooldown = [ns.assist_source_cooldown, battery.cooldown_s | float(0)] | max %}
+            {% set ns.assist_headroom_priority_active = ns.assist_headroom_priority_active or (battery.high_soc_priority | bool) %}
             {% set ns.assist_priority_slots = ns.assist_priority_slots + [battery.slot] %}
           {% endif %}
         {% endif %}
       {% endfor %}
       {% set ns.assist_remaining = [ns.assist_remaining, import_need_w | float(0)] | min %}
       {% for battery in discharge_assist_order %}
-        {% if ns.assist_remaining > 0 and not battery.discharge_locked and battery.cooldown_s < ns.assist_source_cooldown %}
+        {% if ns.assist_remaining > 0
+              and not battery.discharge_locked
+              and (
+                battery.cooldown_s < ns.assist_source_cooldown
+                or ns.assist_headroom_priority_active
+              ) %}
           {% set current_allocation = 0 %}
           {% if battery.slot == 1 %}
             {% set current_allocation = ns.t1 | float(0) %}
