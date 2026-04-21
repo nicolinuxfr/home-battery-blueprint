@@ -208,17 +208,21 @@ variables:
     {% endif %}
 
   discharge_order: >-
-    {% set ns = namespace(priority=[], regular=[]) %}
+    {% set ns = namespace(headroom=[], priority=[], regular=[]) %}
     {% for battery in batteries %}
       {% if battery.can_discharge %}
-        {% if battery.priority %}
+        {% if battery.priority_rank | int(0) >= 2 %}
+          {% set ns.headroom = ns.headroom + [battery] %}
+        {% elif battery.priority %}
           {% set ns.priority = ns.priority + [battery] %}
         {% else %}
           {% set ns.regular = ns.regular + [battery] %}
         {% endif %}
       {% endif %}
     {% endfor %}
-    {{ (ns.priority | sort(attribute='soc', reverse=true)) + (ns.regular | sort(attribute='soc', reverse=true)) }}
+    {{ (ns.headroom | sort(attribute='soc', reverse=true))
+       + (ns.priority | sort(attribute='soc', reverse=true))
+       + (ns.regular | sort(attribute='soc', reverse=true)) }}
   discharge_assist_order: >-
     {% set ns = namespace(candidates=[]) %}
     {% for battery in batteries %}
@@ -228,10 +232,12 @@ variables:
     {% endfor %}
     {{ (ns.candidates | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s') }}
   discharge_trim_order: >-
-    {% set ns = namespace(non_priority=[], priority=[]) %}
+    {% set ns = namespace(non_priority=[], priority=[], headroom=[]) %}
     {% for battery in batteries %}
       {% if battery.can_discharge %}
-        {% if battery.priority %}
+        {% if battery.priority_rank | int(0) >= 2 %}
+          {% set ns.headroom = ns.headroom + [battery] %}
+        {% elif battery.priority %}
           {% set ns.priority = ns.priority + [battery] %}
         {% else %}
           {% set ns.non_priority = ns.non_priority + [battery] %}
@@ -239,19 +245,24 @@ variables:
       {% endif %}
     {% endfor %}
     {{ ((ns.non_priority | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s'))
-       + ((ns.priority | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s')) }}
+       + ((ns.priority | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s'))
+       + ((ns.headroom | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s')) }}
   charge_order: >-
-    {% set ns = namespace(non_priority=[], priority=[]) %}
+    {% set ns = namespace(non_priority=[], priority=[], headroom=[]) %}
     {% for battery in batteries %}
       {% if battery.can_charge %}
-        {% if battery.priority %}
+        {% if battery.priority_rank | int(0) >= 2 %}
+          {% set ns.headroom = ns.headroom + [battery] %}
+        {% elif battery.priority %}
           {% set ns.priority = ns.priority + [battery] %}
         {% else %}
           {% set ns.non_priority = ns.non_priority + [battery] %}
         {% endif %}
       {% endif %}
     {% endfor %}
-    {{ (ns.non_priority | sort(attribute='soc')) + (ns.priority | sort(attribute='soc')) }}
+    {{ (ns.non_priority | sort(attribute='soc'))
+       + (ns.priority | sort(attribute='soc'))
+       + (ns.headroom | sort(attribute='soc')) }}
 
   discharge_plan: >-
     {% set batteries = discharge_order %}
@@ -511,6 +522,7 @@ variables:
         'soc': slot_1_soc | float(0),
         'priority': battery_1_priority_discharge | bool,
         'high_soc_priority': slot_1_high_soc_priority_active | bool,
+        'priority_rank': slot_1_priority_rank | int(0),
         'effective_priority': ((battery_1_priority_discharge | bool) or (slot_1_high_soc_priority_active | bool)) and not (slot_1_discharge_delivery_stalled | bool),
         'current_target_w': slot_1_current_target_w | float(0),
         'signed_target_w': signed_target_1 | float(0),
@@ -533,6 +545,7 @@ variables:
         'soc': slot_2_soc | float(0),
         'priority': battery_2_priority_discharge | bool,
         'high_soc_priority': slot_2_high_soc_priority_active | bool,
+        'priority_rank': slot_2_priority_rank | int(0),
         'effective_priority': ((battery_2_priority_discharge | bool) or (slot_2_high_soc_priority_active | bool)) and not (slot_2_discharge_delivery_stalled | bool),
         'current_target_w': slot_2_current_target_w | float(0),
         'signed_target_w': signed_target_2 | float(0),
@@ -555,6 +568,7 @@ variables:
         'soc': slot_3_soc | float(0),
         'priority': battery_3_priority_discharge | bool,
         'high_soc_priority': slot_3_high_soc_priority_active | bool,
+        'priority_rank': slot_3_priority_rank | int(0),
         'effective_priority': ((battery_3_priority_discharge | bool) or (slot_3_high_soc_priority_active | bool)) and not (slot_3_discharge_delivery_stalled | bool),
         'current_target_w': slot_3_current_target_w | float(0),
         'signed_target_w': signed_target_3 | float(0),
@@ -577,6 +591,7 @@ variables:
         'soc': slot_4_soc | float(0),
         'priority': battery_4_priority_discharge | bool,
         'high_soc_priority': slot_4_high_soc_priority_active | bool,
+        'priority_rank': slot_4_priority_rank | int(0),
         'effective_priority': ((battery_4_priority_discharge | bool) or (slot_4_high_soc_priority_active | bool)) and not (slot_4_discharge_delivery_stalled | bool),
         'current_target_w': slot_4_current_target_w | float(0),
         'signed_target_w': signed_target_4 | float(0),

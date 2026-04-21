@@ -200,6 +200,14 @@ slot___SLOT___high_soc_priority_active: >-
   {% endif %}
 slot___SLOT___priority_requested: >-
   {{ (battery___SLOT___priority_discharge | bool) or (slot___SLOT___high_soc_priority_active | bool) }}
+slot___SLOT___priority_rank: >-
+  {% if slot___SLOT___high_soc_priority_active | bool %}
+    2
+  {% elif battery___SLOT___priority_discharge | bool %}
+    1
+  {% else %}
+    0
+  {% endif %}
 slot___SLOT___effective_balance_power: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% if not (slot___SLOT___actual_power_fresh | bool) %}
@@ -271,6 +279,7 @@ SLOT_BATTERIES_TEMPLATE = """
     'priority': (slot___SLOT___priority_requested | bool) and not (slot___SLOT___discharge_delivery_stalled | bool),
     'configured_priority': battery___SLOT___priority_discharge | bool,
     'high_soc_priority': slot___SLOT___high_soc_priority_active | bool,
+    'priority_rank': (slot___SLOT___priority_rank | int(0)) if not (slot___SLOT___discharge_delivery_stalled | bool) else 0,
     'cooldown_s': battery___SLOT___cooldown_seconds | float(0),
     'max_discharge': battery___SLOT___max_discharge_w | float(0),
     'max_charge': battery___SLOT___max_charge_w | float(0),
