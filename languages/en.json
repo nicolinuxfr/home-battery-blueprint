@@ -47,7 +47,7 @@
   "input.battery.max_charge_w.name": "Maximum charge power",
   "input.battery.max_charge_w.description": "Manual charge limit used by the allocator for opportunistic charging. Set to 0 if this battery must never be charged by the blueprint.",
   "input.battery.priority_discharge.name": "Priority on discharge",
-  "input.battery.priority_discharge.description": "Prioritized batteries are discharged first, ordered by their state of charge. Non-priority batteries come afterwards, also ordered by state of charge.",
+  "input.battery.priority_discharge.description": "Prioritized batteries are discharged first, ordered by their state of charge. Non-priority batteries come afterwards, also ordered by state of charge. To preserve headroom automatically, any battery that reaches 90% state of charge is also treated as priority until it drops below 80% while it stays active.",
   "input.battery.cooldown_seconds.name": "Command cooldown",
   "input.battery.cooldown_seconds.description": "Minimum delay between two active target updates for this battery, and also the expected reaction window used by the discharge allocator. Lower cooldown values are treated as more reactive. Set it to 0 to disable the delay entirely. Writing `0` or flipping the sign still happens immediately so the blueprint can stop or reverse a battery without waiting. While a battery is cooling down, the blueprint keeps its current active target reserved, and a lower-priority battery with a shorter cooldown may temporarily help during discharge until the slower priority battery catches up.",
   "input.battery.target_power_entity.name": "Target power entity",

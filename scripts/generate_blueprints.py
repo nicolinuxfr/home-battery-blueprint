@@ -183,6 +183,23 @@ slot___SLOT___actual_power_fresh: >-
   {% else %}
     {{ slot___SLOT___actual_power_age_s | float(999999) <= [slot___SLOT___response_grace_s | float(0), 45] | max }}
   {% endif %}
+slot___SLOT___high_soc_priority_active: >-
+  {% set soc = slot___SLOT___soc | float(0) %}
+  {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% set actual_power = slot___SLOT___actual_power_w | float(0) %}
+  {% if not slot___SLOT___used %}
+    false
+  {% elif soc >= near_full_priority_on_soc_pct | float(0) %}
+    true
+  {% elif soc <= near_full_priority_off_soc_pct | float(0) %}
+    false
+  {% else %}
+    {{ current_target != 0
+       or ((slot___SLOT___actual_power_fresh | bool)
+           and (actual_power | abs) >= command_deadband_w | float(0)) }}
+  {% endif %}
+slot___SLOT___priority_requested: >-
+  {{ (battery___SLOT___priority_discharge | bool) or (slot___SLOT___high_soc_priority_active | bool) }}
 slot___SLOT___effective_balance_power: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% if not (slot___SLOT___actual_power_fresh | bool) %}
@@ -209,7 +226,7 @@ slot___SLOT___discharge_delivery_stalled: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% set actual_discharge = slot___SLOT___actual_discharge_w | float(0) %}
   {% if current_target <= 0
-        or not (battery___SLOT___priority_discharge | bool)
+        or not (slot___SLOT___priority_requested | bool)
         or not (slot___SLOT___actual_power_fresh | bool)
         or slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
     false
@@ -251,7 +268,9 @@ SLOT_BATTERIES_TEMPLATE = """
   {% set ns.items = ns.items + [{
     'slot': __SLOT__,
     'soc': slot___SLOT___soc | float(0),
-    'priority': (battery___SLOT___priority_discharge | bool) and not (slot___SLOT___discharge_delivery_stalled | bool),
+    'priority': (slot___SLOT___priority_requested | bool) and not (slot___SLOT___discharge_delivery_stalled | bool),
+    'configured_priority': battery___SLOT___priority_discharge | bool,
+    'high_soc_priority': slot___SLOT___high_soc_priority_active | bool,
     'cooldown_s': battery___SLOT___cooldown_seconds | float(0),
     'max_discharge': battery___SLOT___max_discharge_w | float(0),
     'max_charge': battery___SLOT___max_charge_w | float(0),

@@ -47,7 +47,7 @@
   "input.battery.max_charge_w.name": "Puissance maximale de charge",
   "input.battery.max_charge_w.description": "Limite de charge saisie manuellement et utilisée pour la charge opportuniste. Mets 0 si cette batterie ne doit jamais être chargée par le blueprint.",
   "input.battery.priority_discharge.name": "Prioritaire en décharge",
-  "input.battery.priority_discharge.description": "Les batteries prioritaires sont vidées en premier, triées par pourcentage de charge. Les autres viennent ensuite, elles aussi triées par pourcentage.",
+  "input.battery.priority_discharge.description": "Les batteries prioritaires sont vidées en premier, triées par pourcentage de charge. Les autres viennent ensuite, elles aussi triées par pourcentage. Pour préserver automatiquement une marge, toute batterie qui atteint 90 % de charge est aussi traitée comme prioritaire jusqu'à redescendre sous 80 % tant qu'elle reste active.",
   "input.battery.cooldown_seconds.name": "Cooldown de commande",
   "input.battery.cooldown_seconds.description": "Délai minimal entre deux mises à jour actives de consigne pour cette batterie, et aussi fenêtre de réaction attendue utilisée par l'allocateur en décharge. Plus le cooldown est petit, plus la batterie est considérée comme réactive. Mets 0 pour supprimer complètement ce délai. Un passage à `0` ou un changement de signe restent immédiats pour forcer un arrêt ou une inversion de mode sans attendre. Pendant le cooldown, le blueprint réserve la consigne active de cette batterie, et une batterie moins prioritaire avec un cooldown plus court peut aider temporairement en décharge jusqu'à ce que la batterie prioritaire plus lente rattrape sa consigne.",
   "input.battery.target_power_entity.name": "Entité de consigne de puissance",

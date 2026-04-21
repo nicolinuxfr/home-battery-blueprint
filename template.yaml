@@ -48,6 +48,8 @@ variables:
   command_deadband_w: 60
   release_deadband_w: 80
   minimum_trigger_delta_w: 10
+  near_full_priority_on_soc_pct: 90
+  near_full_priority_off_soc_pct: 80
 
   [[generated.slot_bindings]]
 
@@ -508,6 +510,8 @@ variables:
         'used': slot_1_used | bool,
         'soc': slot_1_soc | float(0),
         'priority': battery_1_priority_discharge | bool,
+        'high_soc_priority': slot_1_high_soc_priority_active | bool,
+        'effective_priority': ((battery_1_priority_discharge | bool) or (slot_1_high_soc_priority_active | bool)) and not (slot_1_discharge_delivery_stalled | bool),
         'current_target_w': slot_1_current_target_w | float(0),
         'signed_target_w': signed_target_1 | float(0),
         'discharge_target_w': discharge_target_1 | float(0),
@@ -528,6 +532,8 @@ variables:
         'used': slot_2_used | bool,
         'soc': slot_2_soc | float(0),
         'priority': battery_2_priority_discharge | bool,
+        'high_soc_priority': slot_2_high_soc_priority_active | bool,
+        'effective_priority': ((battery_2_priority_discharge | bool) or (slot_2_high_soc_priority_active | bool)) and not (slot_2_discharge_delivery_stalled | bool),
         'current_target_w': slot_2_current_target_w | float(0),
         'signed_target_w': signed_target_2 | float(0),
         'discharge_target_w': discharge_target_2 | float(0),
@@ -548,6 +554,8 @@ variables:
         'used': slot_3_used | bool,
         'soc': slot_3_soc | float(0),
         'priority': battery_3_priority_discharge | bool,
+        'high_soc_priority': slot_3_high_soc_priority_active | bool,
+        'effective_priority': ((battery_3_priority_discharge | bool) or (slot_3_high_soc_priority_active | bool)) and not (slot_3_discharge_delivery_stalled | bool),
         'current_target_w': slot_3_current_target_w | float(0),
         'signed_target_w': signed_target_3 | float(0),
         'discharge_target_w': discharge_target_3 | float(0),
@@ -568,6 +576,8 @@ variables:
         'used': slot_4_used | bool,
         'soc': slot_4_soc | float(0),
         'priority': battery_4_priority_discharge | bool,
+        'high_soc_priority': slot_4_high_soc_priority_active | bool,
+        'effective_priority': ((battery_4_priority_discharge | bool) or (slot_4_high_soc_priority_active | bool)) and not (slot_4_discharge_delivery_stalled | bool),
         'current_target_w': slot_4_current_target_w | float(0),
         'signed_target_w': signed_target_4 | float(0),
         'discharge_target_w': discharge_target_4 | float(0),
