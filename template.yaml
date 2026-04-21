@@ -512,8 +512,32 @@ variables:
   neutral_target_4: "{{ neutral_targets['4'] | float(0) }}"
 
   [[generated.command_vars]]
+  pending_slot_target_updates: >-
+    {{
+      (should_write_target_power_1 | bool)
+      or (should_write_target_power_2 | bool)
+      or (should_write_target_power_3 | bool)
+      or (should_write_target_power_4 | bool)
+    }}
+  pending_slot_actions: >-
+    {{
+      (should_run_discharge_actions_1 | bool)
+      or (should_run_discharge_actions_2 | bool)
+      or (should_run_discharge_actions_3 | bool)
+      or (should_run_discharge_actions_4 | bool)
+      or (should_run_charge_actions_1 | bool)
+      or (should_run_charge_actions_2 | bool)
+      or (should_run_charge_actions_3 | bool)
+      or (should_run_charge_actions_4 | bool)
+    }}
+  should_stop_small_house_power_delta: >-
+    {{
+      (should_skip_small_house_power_delta | bool)
+      and not (pending_slot_target_updates | bool)
+      and not (pending_slot_actions | bool)
+    }}
   run_log_reason: >-
-    {% if should_skip_small_house_power_delta %}
+    {% if should_stop_small_house_power_delta %}
       small_delta_skipped
     {% elif validation_errors | count > 0 %}
       invalid_config
@@ -652,7 +676,7 @@ actions:
       - alias: "[[trace.small_delta_branch]]"
         conditions:
           - condition: template
-            value_template: "{{ should_skip_small_house_power_delta }}"
+            value_template: "{{ should_stop_small_house_power_delta }}"
         sequence:
           - alias: "[[trace.stop_small_delta]]"
             stop: >-
