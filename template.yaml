@@ -118,7 +118,9 @@ variables:
   # target power during each battery response grace period so a slow priority
   # battery keeps ownership of the power it has just been asked to provide,
   # while faster lower-priority batteries can temporarily cover the observed
-  # ramp gap when their cooldown is shorter.
+  # ramp gap when their cooldown is shorter. A raw house export beyond the
+  # release deadband now also trims discharge targets back down, so stale
+  # reserved power cannot keep forcing large exports for a whole cooldown.
   managed_battery_power_w: >-
     {{
       (slot_1_effective_balance_power | float(0))
@@ -126,6 +128,16 @@ variables:
       + (slot_3_effective_balance_power | float(0))
       + (slot_4_effective_balance_power | float(0))
     }}
+  raw_export_w: "{{ [0 - house_power_w, 0] | max if house_power_valid else 0 }}"
+  discharge_export_guard_w: >-
+    {% if not house_power_valid %}
+      0
+    {% elif raw_export_w | float(0) <= release_deadband_w | float(0) %}
+      0
+    {% else %}
+      {{ (raw_export_w | float(0)) - (release_deadband_w | float(0)) }}
+    {% endif %}
+  discharge_export_guard_active: "{{ discharge_export_guard_w | float(0) > 0 }}"
   adjusted_house_power_w: >-
     {% if house_power_valid %}
       {{ (house_power_w | float(0)) + (managed_battery_power_w | float(0)) }}
@@ -213,6 +225,19 @@ variables:
       {% endif %}
     {% endfor %}
     {{ (ns.candidates | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s') }}
+  discharge_trim_order: >-
+    {% set ns = namespace(non_priority=[], priority=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_discharge %}
+        {% if battery.priority %}
+          {% set ns.priority = ns.priority + [battery] %}
+        {% else %}
+          {% set ns.non_priority = ns.non_priority + [battery] %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ ((ns.non_priority | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s'))
+       + ((ns.priority | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s')) }}
   charge_order: >-
     {% set ns = namespace(non_priority=[], priority=[]) %}
     {% for battery in batteries %}
@@ -231,6 +256,7 @@ variables:
     {% set ns = namespace(
       remaining=import_need_w | float(0),
       assist_remaining=0,
+      trim_remaining=discharge_export_guard_w | float(0),
       assist_source_cooldown=-1,
       assist_used=0,
       assist_priority_slots=[],
@@ -324,6 +350,31 @@ variables:
             {% set ns.assist_used = ns.assist_used + assist_allocation %}
             {% set ns.assist_helper_slots = ns.assist_helper_slots + [battery.slot] %}
           {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% for battery in discharge_trim_order %}
+        {% if ns.trim_remaining > 0 %}
+          {% set current_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set current_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set current_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set current_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set current_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% set trim_allocation = [current_allocation, ns.trim_remaining] | min %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = (current_allocation - trim_allocation) | round(0) %}
+          {% endif %}
+          {% set ns.trim_remaining = [ns.trim_remaining - trim_allocation, 0] | max %}
         {% endif %}
       {% endfor %}
     {% elif operating_mode == 'discharge_hold' %}
@@ -553,6 +604,7 @@ actions:
       export_surplus_w: "{{ export_surplus_w | float(0) | round(1) }}"
       current_total_discharge_w: "{{ current_total_discharge_w | float(0) | round(1) }}"
       current_total_charge_w: "{{ current_total_charge_w | float(0) | round(1) }}"
+      discharge_export_guard_w: "{{ discharge_export_guard_w | float(0) | round(1) }}"
       discharge_assist_w: "{{ discharge_assist_w | float(0) | round(1) }}"
       discharge_assist_priority_slots: "{{ discharge_assist_priority_slots }}"
       discharge_assist_helper_slots: "{{ discharge_assist_helper_slots }}"

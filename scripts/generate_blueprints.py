@@ -326,7 +326,10 @@ should_write_target_power___SLOT__: >-
         and slot___SLOT___current_target_sign | int(0) != 0 %}
     true
   {% elif signed_target___SLOT__ | float(0) > 0 %}
-    {{ discharge_cooldown_ok___SLOT__ }}
+    {{ discharge_cooldown_ok___SLOT__
+       or (discharge_export_guard_active
+           and slot___SLOT___current_target_w | float(0) > 0
+           and signed_target___SLOT__ | float(0) < slot___SLOT___current_target_w | float(0)) }}
   {% elif signed_target___SLOT__ | float(0) < 0 %}
     {{ charge_cooldown_ok___SLOT__ }}
   {% else %}
@@ -338,7 +341,10 @@ should_run_discharge_actions___SLOT__: >-
   {% elif slot___SLOT___current_target_sign | int(0) != 1 %}
     true
   {% else %}
-    {{ discharge_cooldown_ok___SLOT__ }}
+    {{ discharge_cooldown_ok___SLOT__
+       or (discharge_export_guard_active
+           and slot___SLOT___current_target_w | float(0) > 0
+           and signed_target___SLOT__ | float(0) < slot___SLOT___current_target_w | float(0)) }}
   {% endif %}
 should_run_charge_actions___SLOT__: >-
   {% if not slot___SLOT___has_charge_actions or signed_target___SLOT__ | float(0) >= 0 %}
