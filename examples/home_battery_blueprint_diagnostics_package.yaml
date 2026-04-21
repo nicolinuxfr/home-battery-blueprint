@@ -1,0 +1,40 @@
+# Example Home Assistant package for capturing one JSON log line per
+# `home_battery_blueprint_run` event. Enable it for 24h, then send back
+# `/config/home_battery_blueprint_runs.jsonl`.
+#
+# Usage:
+# 1. Ensure packages are enabled in configuration.yaml:
+#      homeassistant:
+#        packages: !include_dir_named packages
+# 2. Copy this file to /config/packages/home_battery_blueprint_diagnostics.yaml
+# 3. Restart Home Assistant
+# 4. Let it run for 24h
+# 5. Send back /config/home_battery_blueprint_runs.jsonl
+#
+# Optional cleanup:
+# - delete /config/home_battery_blueprint_runs.jsonl before starting a new capture
+# - disable this package after the capture window if you no longer need it
+
+notify:
+  - platform: file
+    name: home_battery_blueprint_runs
+    filename: /config/home_battery_blueprint_runs.jsonl
+    timestamp: false
+
+automation:
+  - id: home_battery_blueprint_capture_runs
+    alias: Home Battery Blueprint - Capture diagnostic runs
+    mode: queued
+    max: 200
+    trigger:
+      - platform: event
+        event_type: home_battery_blueprint_run
+    action:
+      - service: notify.home_battery_blueprint_runs
+        data:
+          message: >-
+            {{ {
+              'captured_at': now().isoformat(),
+              'event_type': trigger.event.event_type,
+              'data': trigger.event.data
+            } | tojson }}

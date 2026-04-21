@@ -25,8 +25,8 @@ Pour chaque slot batterie :
 - `Puissance maximale de décharge` et `Puissance maximale de charge` : limites manuelles utilisées par l'algorithme.
 - `Prioritaire en décharge` : les batteries prioritaires se vident d'abord ; la charge opportuniste préfère d'abord les batteries non prioritaires.
 - `Entité de consigne de puissance` : entité `number` ou `input_number` écrite par le blueprint. La consigne est signée : positive en décharge, négative en charge, `0` à l'arrêt. Si tu actives la charge, l'entité choisie doit accepter les valeurs négatives.
-- `Capteur de puissance réelle` : capteur optionnel qui remonte la puissance réellement fournie par la batterie. Le blueprint continue de piloter d'abord avec la consigne écrite et le compteur maison, puis il n'utilise ce capteur qu'en correction secondaire différée quand la mesure reste fraîche et qu'une batterie non prioritaire fournit durablement nettement moins que sa consigne active après le délai de réponse. Une batterie prioritaire n'est jamais réduite par cette correction en décharge, mais une télémétrie fraîche peut tout de même montrer qu'elle délivre déjà plus que sa consigne signée.
-- `Cooldown de commande` : délai anti-spam par batterie pour les mises à jour actives de consigne. Mets `0` pour le désactiver. Les passages à `0` et les inversions de signe restent immédiats pour ne pas retarder un arrêt ou un changement de sens. Pendant qu'une batterie est en cooldown, l'allocateur conserve sa consigne active et ne redistribue aux autres batteries que la demande ou le surplus restant.
+- `Capteur de puissance réelle` : capteur optionnel qui remonte la puissance réellement fournie par la batterie. Le blueprint continue de piloter d'abord avec la consigne écrite et le compteur maison, puis il utilise ce capteur comme correction secondaire différée quand la mesure reste fraîche et qu'une batterie non prioritaire fournit durablement nettement moins que sa consigne active après le délai de réponse. En décharge, une télémétrie fraîche d'une batterie prioritaire peut aussi confirmer qu'elle est encore en phase de montée, afin qu'une batterie moins prioritaire avec un cooldown plus court continue temporairement à aider jusqu'à ce que la batterie prioritaire rattrape sa consigne. Une batterie prioritaire n'est jamais réduite par cette correction en décharge, mais une télémétrie fraîche peut tout de même montrer qu'elle délivre déjà plus que sa consigne signée.
+- `Cooldown de commande` : délai par batterie entre deux mises à jour actives de consigne, et aussi fenêtre de réaction attendue utilisée par l'allocateur en décharge. Plus le cooldown est petit, plus la batterie est considérée comme réactive. Mets `0` pour supprimer complètement ce délai. Les passages à `0` et les inversions de signe restent immédiats pour ne pas retarder un arrêt ou un changement de sens. Pendant qu'une batterie est en cooldown, l'allocateur réserve sa consigne active, et une batterie moins prioritaire avec un cooldown plus court peut aider temporairement en décharge jusqu'à ce que la batterie prioritaire plus lente rattrape sa consigne.
 - `Actions de décharge` et `Actions de charge` : hooks optionnels exécutés à chaque mise à jour active dans le sens correspondant. Ils reçoivent des variables d'exécution comme `battery_slot`, `battery_soc`, `target_power_w`, `target_discharge_w`, `target_charge_w`, `house_power_w` et `export_surplus_w`.
 
 Exemple Zendure :
@@ -39,17 +39,19 @@ Exemple Zendure :
 ## Fonctionnement
 
 - À chaque run, le blueprint choisit un seul mode exclusif : `discharge`, `charge` ou `neutral`.
+- Il émet aussi désormais un événement structuré `home_battery_blueprint_run` à chaque exécution, avant tout arrêt anticipé ou écriture par slot. Cet événement contient la source du déclenchement, la raison de décision, le mode retenu, les puissances maison, les consignes calculées, l'état de l'assistance, les erreurs de validation et un snapshot JSON de chaque slot batterie avec consigne courante, consigne signée désirée, puissance réelle, état de verrouillage par cooldown et écritures/actions prévues.
 - Les runs déclenchés par le capteur de puissance maison ignorent maintenant les mises à jour qui ne changent que les attributs, et ils s'arrêtent aussi très tôt si la variation numérique reste sous un seuil interne de `10 W`. Les entités de blocage, elles, continuent à déclencher immédiatement sans passer par ce seuil.
-- En décharge, il répartit `max(house_power, 0)` entre les batteries, en privilégiant d'abord les batteries marquées prioritaires puis en triant par pourcentage de charge décroissant.
+- En décharge, il répartit `max(house_power, 0)` entre les batteries, en privilégiant d'abord les batteries marquées prioritaires puis en triant par pourcentage de charge décroissant. Si une batterie prioritaire est encore en phase de montée et remonte une puissance réelle fraîche, une batterie moins prioritaire avec un cooldown plus court peut aider temporairement jusqu'à ce que la batterie prioritaire rattrape sa consigne.
 - L'allocateur reconstruit la demande maison sous-jacente à partir du capteur maison net en réajoutant les consignes signées déjà actives sur les batteries gérées. Cela évite que le capteur maison annule artificiellement le travail des batteries et limite fortement les oscillations dues aux télémétries vendor lentes.
 - Quand un capteur optionnel de puissance réelle est configuré et reste frais, le blueprint peut l'utiliser comme correction secondaire différée après le délai de réponse pour détecter qu'une batterie non prioritaire délivre durablement nettement moins que sa consigne active. Cette correction ne remplace jamais la boucle principale basée sur la consigne et le compteur maison. En décharge, elle ne réduit jamais une batterie prioritaire, mais elle peut quand même augmenter sa contribution effective si la télémétrie montre qu'elle délivre déjà plus que sa consigne signée.
 - Si une batterie prioritaire garde une consigne de décharge active mais qu'une télémétrie fraîche montre qu'elle ne délivre pratiquement plus rien après le délai de réponse, elle cesse temporairement d'être traitée comme prioritaire et les autres batteries restantes sont alors ordonnées uniquement par leur pourcentage de charge.
 - Pendant un cooldown ou une phase de latence, le blueprint continue de raisonner à partir de la consigne déjà active et de l'effet observé sur la consommation nette de la maison, sans dépendre d'une télémétrie batterie lente ou irrégulière.
 - Lorsqu'une batterie vient de recevoir une nouvelle consigne, le blueprint réserve désormais cette puissance demandée pendant tout son délai de réponse, tout en reconstruisant la demande maison à partir de la puissance batterie réellement mesurée quand la télémétrie reste fraîche. Cela évite qu'une batterie prioritaire plus lente fasse réattribuer immédiatement la même puissance à une autre batterie.
+- Pour surveiller l'effet de bord principal de cette assistance temporaire, le blueprint émet maintenant un événement `home_battery_blueprint_assist_overshoot` dès qu'une puissance d'appui est active et que le compteur maison brut voit déjà un export significatif. L'événement contient la puissance maison courante, la demande reconstruite, les watts d'assistance, les slots d'appui, les slots prioritaires encore en montée, les consignes de décharge et les puissances réelles mesurées.
 - En charge opportuniste, il réagit désormais à tout export réel qui reste après avoir retiré la contribution de décharge déjà pilotée par les batteries gérées, puis remplit les batteries chargeables du SOC le plus bas vers le plus haut, en évitant autant que possible les batteries prioritaires en décharge. Cela évite qu'une batterie en recharge une autre tout en absorbant l'export au lieu de l'envoyer au réseau.
 - Une bande morte interne fixe de `60 W` filtre les très petites oscillations du compteur, et un seuil interne fixe de relâchement à `80 W` maintient une batterie déjà active tant que le flux opposé reste faible. Ensemble, ils réduisent les bascules autour de `0 W` sans ajouter de réglages visibles, tout en restant plus proches de zéro.
 - En zone morte `neutral`, le blueprint conserve maintenant la contribution déjà en cours des batteries gérées au lieu de retomber immédiatement à `0`. Cela évite les cycles marche/arrêt quand une batterie vient juste de compenser presque toute la demande maison.
-- La consigne écrite par le blueprint est signée : positive en décharge, négative en charge, `0` en neutre. Un passage à `0`, un capteur invalide, un blocage actif ou une inversion de signe provoquent une écriture immédiate sans attendre le cooldown. Pendant un cooldown actif, le blueprint réserve désormais la puissance déjà commandée sur cette batterie et ne réalloue aux autres batteries que la charge ou le surplus restant.
+- La consigne écrite par le blueprint est signée : positive en décharge, négative en charge, `0` en neutre. Un passage à `0`, un capteur invalide, un blocage actif ou une inversion de signe provoquent une écriture immédiate sans attendre le cooldown. Pendant un cooldown actif, le blueprint réserve désormais la puissance déjà commandée sur cette batterie ; si une batterie prioritaire plus lente est encore en phase de montée, une batterie moins prioritaire avec un cooldown plus court peut temporairement couvrir l'écart observé avant d'être relâchée au run suivant.
 - Un redémarrage depuis `0` vers le même sens ne contourne plus le cooldown. Cela évite les oscillations rapides où une batterie prioritaire est relâchée pour laisser aider une autre, puis reprend immédiatement la charge au tick suivant.
 - Si une entité de consigne refuse une mise à jour, par exemple parce que l'intégration impose son propre délai minimal entre deux changements, l'automatisation continue maintenant et met quand même à jour les autres slots batterie.
 - La validation s'exécute maintenant avant toute écriture par batterie ou action personnalisée. Chaque commande non nulle est revérifiée contre l'état courant des entités de blocage juste avant l'exécution, et l'écriture d'un `0` en mode bloqué n'est autorisée que sur le changement d'état du bloqueur lui-même.
@@ -63,3 +65,28 @@ Exemple Zendure :
 - Si une batterie doit charger, l'entité de consigne choisie doit accepter les valeurs négatives. Sinon, utilise un helper signé intermédiaire.
 - Les actions optionnelles ne tournent pas en neutre. Si ton intégration a besoin d'une traduction explicite du `0`, passe par un helper signé que l'intégration ou une autre automatisation consomme.
 - Les métadonnées du blueprint et la documentation pointent vers `nicolinuxfr/home-battery-blueprint`.
+
+## Capture de logs 24 h
+
+Le moyen le plus simple pour me renvoyer un historique exploitable est de capturer les événements `home_battery_blueprint_run` dans un fichier JSONL.
+
+Un package Home Assistant prêt à copier est fourni dans [examples/home_battery_blueprint_diagnostics_package.yaml](/Users/nicolas/Developer/domotique/home-battery-blueprint/examples/home_battery_blueprint_diagnostics_package.yaml).
+
+Étapes :
+
+1. Active les `packages` Home Assistant si ce n'est pas déjà fait :
+
+```yaml
+homeassistant:
+  packages: !include_dir_named packages
+```
+
+2. Copie [examples/home_battery_blueprint_diagnostics_package.yaml](/Users/nicolas/Developer/domotique/home-battery-blueprint/examples/home_battery_blueprint_diagnostics_package.yaml) vers `/config/packages/home_battery_blueprint_diagnostics.yaml`.
+3. Redémarre Home Assistant.
+4. Laisse tourner 24 h.
+5. Récupère `/config/home_battery_blueprint_runs.jsonl` et renvoie-le-moi.
+
+Conseils :
+
+- Supprime le fichier `/config/home_battery_blueprint_runs.jsonl` avant une nouvelle capture pour repartir proprement.
+- Le fichier contient une ligne JSON par run du blueprint, ce qui est facile à filtrer ou compresser avant envoi.

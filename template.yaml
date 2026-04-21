@@ -116,7 +116,9 @@ variables:
   # measured managed battery contribution when fresh telemetry is available.
   # Allocation then keeps a separate temporary reservation of newly requested
   # target power during each battery response grace period so a slow priority
-  # battery keeps ownership of the power it has just been asked to provide.
+  # battery keeps ownership of the power it has just been asked to provide,
+  # while faster lower-priority batteries can temporarily cover the observed
+  # ramp gap when their cooldown is shorter.
   managed_battery_power_w: >-
     {{
       (slot_1_effective_balance_power | float(0))
@@ -203,6 +205,14 @@ variables:
       {% endif %}
     {% endfor %}
     {{ (ns.priority | sort(attribute='soc', reverse=true)) + (ns.regular | sort(attribute='soc', reverse=true)) }}
+  discharge_assist_order: >-
+    {% set ns = namespace(candidates=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_discharge and not battery.priority %}
+        {% set ns.candidates = ns.candidates + [battery] %}
+      {% endif %}
+    {% endfor %}
+    {{ (ns.candidates | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s') }}
   charge_order: >-
     {% set ns = namespace(non_priority=[], priority=[]) %}
     {% for battery in batteries %}
@@ -216,9 +226,20 @@ variables:
     {% endfor %}
     {{ (ns.non_priority | sort(attribute='soc')) + (ns.priority | sort(attribute='soc')) }}
 
-  discharge_targets: >-
+  discharge_plan: >-
     {% set batteries = discharge_order %}
-    {% set ns = namespace(remaining=import_need_w | float(0), t1=0, t2=0, t3=0, t4=0) %}
+    {% set ns = namespace(
+      remaining=import_need_w | float(0),
+      assist_remaining=0,
+      assist_source_cooldown=-1,
+      assist_used=0,
+      assist_priority_slots=[],
+      assist_helper_slots=[],
+      t1=0,
+      t2=0,
+      t3=0,
+      t4=0
+    ) %}
     {% if operating_mode == 'discharge' %}
       {% for battery in batteries %}
         {% if battery.discharge_locked %}
@@ -252,6 +273,59 @@ variables:
           {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
         {% endif %}
       {% endfor %}
+      {% for battery in batteries %}
+        {% if battery.priority and battery.actual_power_fresh %}
+          {% set desired_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set desired_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set desired_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set desired_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set desired_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% set ramping_now = desired_allocation > (battery.current_discharge | float(0)) %}
+          {% set still_ramping = battery.discharge_locked and battery.target_age_s < battery.response_grace_s %}
+          {% if desired_allocation > battery.actual_discharge and (ramping_now or still_ramping) %}
+            {% set assist_gap = [desired_allocation - battery.actual_discharge, 0] | max %}
+            {% set ns.assist_remaining = ns.assist_remaining + assist_gap %}
+            {% set ns.assist_source_cooldown = [ns.assist_source_cooldown, battery.cooldown_s | float(0)] | max %}
+            {% set ns.assist_priority_slots = ns.assist_priority_slots + [battery.slot] %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% set ns.assist_remaining = [ns.assist_remaining, import_need_w | float(0)] | min %}
+      {% for battery in discharge_assist_order %}
+        {% if ns.assist_remaining > 0 and not battery.discharge_locked and battery.cooldown_s < ns.assist_source_cooldown %}
+          {% set current_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set current_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set current_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set current_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set current_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% set headroom = [battery.max_discharge - current_allocation, 0] | max %}
+          {% set assist_allocation = [headroom, ns.assist_remaining] | min %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = (current_allocation + assist_allocation) | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = (current_allocation + assist_allocation) | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = (current_allocation + assist_allocation) | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = (current_allocation + assist_allocation) | round(0) %}
+          {% endif %}
+          {% set ns.assist_remaining = [ns.assist_remaining - assist_allocation, 0] | max %}
+          {% if assist_allocation > 0 %}
+            {% set ns.assist_used = ns.assist_used + assist_allocation %}
+            {% set ns.assist_helper_slots = ns.assist_helper_slots + [battery.slot] %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
     {% elif operating_mode == 'discharge_hold' %}
       {% for battery in batteries %}
         {% set allocation = battery.current_discharge | float(0) %}
@@ -266,7 +340,13 @@ variables:
         {% endif %}
       {% endfor %}
     {% endif %}
-    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
+    {{ {
+      'targets': {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4},
+      'assist_w': ns.assist_used | round(0),
+      'assist_priority_slots': ns.assist_priority_slots,
+      'assist_helper_slots': ns.assist_helper_slots
+    } }}
+  discharge_targets: "{{ discharge_plan['targets'] }}"
   charge_targets: >-
     {% set batteries = charge_order %}
     {% set ns = namespace(remaining=export_surplus_w | float(0), t1=0, t2=0, t3=0, t4=0) %}
@@ -337,6 +417,14 @@ variables:
       {% endfor %}
     {% endif %}
     {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
+  discharge_assist_w: "{{ discharge_plan['assist_w'] | float(0) }}"
+  discharge_assist_priority_slots: "{{ discharge_plan['assist_priority_slots'] }}"
+  discharge_assist_helper_slots: "{{ discharge_plan['assist_helper_slots'] }}"
+  assist_overshoot_detected: >-
+    {{ operating_mode == 'discharge'
+       and discharge_assist_w | float(0) > 0
+       and house_power_valid
+       and house_power_w | float(0) <= 0 - (command_deadband_w | float(0)) }}
 
   discharge_target_1: "{{ discharge_targets['1'] | float(0) }}"
   discharge_target_2: "{{ discharge_targets['2'] | float(0) }}"
@@ -353,8 +441,128 @@ variables:
   neutral_target_4: "{{ neutral_targets['4'] | float(0) }}"
 
   [[generated.command_vars]]
+  run_log_reason: >-
+    {% if should_skip_small_house_power_delta %}
+      small_delta_skipped
+    {% elif validation_errors | count > 0 %}
+      invalid_config
+    {% elif operating_mode == 'invalid_sensor' %}
+      invalid_sensor
+    {% else %}
+      {{ operating_mode }}
+    {% endif %}
+  run_log_slots_json: >-
+    {{ {
+      '1': {
+        'used': slot_1_used | bool,
+        'soc': slot_1_soc | float(0),
+        'priority': battery_1_priority_discharge | bool,
+        'current_target_w': slot_1_current_target_w | float(0),
+        'signed_target_w': signed_target_1 | float(0),
+        'discharge_target_w': discharge_target_1 | float(0),
+        'charge_target_w': charge_target_1 | float(0),
+        'neutral_target_w': neutral_target_1 | float(0),
+        'actual_discharge_w': slot_1_actual_discharge_w | float(0),
+        'actual_charge_w': slot_1_actual_charge_w | float(0),
+        'actual_power_fresh': slot_1_actual_power_fresh | bool,
+        'target_age_s': slot_1_target_age_s | float(0),
+        'response_grace_s': slot_1_response_grace_s | float(0),
+        'discharge_locked': (not (discharge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) > 0,
+        'charge_locked': (not (charge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) < 0,
+        'should_write_target': should_write_target_power_1 | bool,
+        'should_run_discharge_actions': should_run_discharge_actions_1 | bool,
+        'should_run_charge_actions': should_run_charge_actions_1 | bool
+      },
+      '2': {
+        'used': slot_2_used | bool,
+        'soc': slot_2_soc | float(0),
+        'priority': battery_2_priority_discharge | bool,
+        'current_target_w': slot_2_current_target_w | float(0),
+        'signed_target_w': signed_target_2 | float(0),
+        'discharge_target_w': discharge_target_2 | float(0),
+        'charge_target_w': charge_target_2 | float(0),
+        'neutral_target_w': neutral_target_2 | float(0),
+        'actual_discharge_w': slot_2_actual_discharge_w | float(0),
+        'actual_charge_w': slot_2_actual_charge_w | float(0),
+        'actual_power_fresh': slot_2_actual_power_fresh | bool,
+        'target_age_s': slot_2_target_age_s | float(0),
+        'response_grace_s': slot_2_response_grace_s | float(0),
+        'discharge_locked': (not (discharge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) > 0,
+        'charge_locked': (not (charge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) < 0,
+        'should_write_target': should_write_target_power_2 | bool,
+        'should_run_discharge_actions': should_run_discharge_actions_2 | bool,
+        'should_run_charge_actions': should_run_charge_actions_2 | bool
+      },
+      '3': {
+        'used': slot_3_used | bool,
+        'soc': slot_3_soc | float(0),
+        'priority': battery_3_priority_discharge | bool,
+        'current_target_w': slot_3_current_target_w | float(0),
+        'signed_target_w': signed_target_3 | float(0),
+        'discharge_target_w': discharge_target_3 | float(0),
+        'charge_target_w': charge_target_3 | float(0),
+        'neutral_target_w': neutral_target_3 | float(0),
+        'actual_discharge_w': slot_3_actual_discharge_w | float(0),
+        'actual_charge_w': slot_3_actual_charge_w | float(0),
+        'actual_power_fresh': slot_3_actual_power_fresh | bool,
+        'target_age_s': slot_3_target_age_s | float(0),
+        'response_grace_s': slot_3_response_grace_s | float(0),
+        'discharge_locked': (not (discharge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) > 0,
+        'charge_locked': (not (charge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) < 0,
+        'should_write_target': should_write_target_power_3 | bool,
+        'should_run_discharge_actions': should_run_discharge_actions_3 | bool,
+        'should_run_charge_actions': should_run_charge_actions_3 | bool
+      },
+      '4': {
+        'used': slot_4_used | bool,
+        'soc': slot_4_soc | float(0),
+        'priority': battery_4_priority_discharge | bool,
+        'current_target_w': slot_4_current_target_w | float(0),
+        'signed_target_w': signed_target_4 | float(0),
+        'discharge_target_w': discharge_target_4 | float(0),
+        'charge_target_w': charge_target_4 | float(0),
+        'neutral_target_w': neutral_target_4 | float(0),
+        'actual_discharge_w': slot_4_actual_discharge_w | float(0),
+        'actual_charge_w': slot_4_actual_charge_w | float(0),
+        'actual_power_fresh': slot_4_actual_power_fresh | bool,
+        'target_age_s': slot_4_target_age_s | float(0),
+        'response_grace_s': slot_4_response_grace_s | float(0),
+        'discharge_locked': (not (discharge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) > 0,
+        'charge_locked': (not (charge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) < 0,
+        'should_write_target': should_write_target_power_4 | bool,
+        'should_run_discharge_actions': should_run_discharge_actions_4 | bool,
+        'should_run_charge_actions': should_run_charge_actions_4 | bool
+      }
+    } | tojson }}
 
 actions:
+  - alias: "[[trace.run_log_gate]]"
+    event: home_battery_blueprint_run
+    event_data:
+      reason: "{{ run_log_reason }}"
+      trigger_entity_id: "{{ trigger_entity_id }}"
+      triggered_by_house_power_sensor: "{{ triggered_by_house_power_sensor }}"
+      triggered_by_blocking_entity: "{{ triggered_by_blocking_entity }}"
+      blocking_trigger_entered_blocked: "{{ blocking_trigger_entered_blocked }}"
+      operating_mode: "{{ operating_mode }}"
+      gate_blocked: "{{ gate_blocked }}"
+      house_power_valid: "{{ house_power_valid }}"
+      house_power_w: "{{ house_power_w | float(0) | round(1) }}"
+      adjusted_house_power_w: "{{ adjusted_house_power_w | float(0) | round(1) }}"
+      import_need_w: "{{ import_need_w | float(0) | round(1) }}"
+      export_surplus_w: "{{ export_surplus_w | float(0) | round(1) }}"
+      current_total_discharge_w: "{{ current_total_discharge_w | float(0) | round(1) }}"
+      current_total_charge_w: "{{ current_total_charge_w | float(0) | round(1) }}"
+      discharge_assist_w: "{{ discharge_assist_w | float(0) | round(1) }}"
+      discharge_assist_priority_slots: "{{ discharge_assist_priority_slots }}"
+      discharge_assist_helper_slots: "{{ discharge_assist_helper_slots }}"
+      assist_overshoot_detected: "{{ assist_overshoot_detected }}"
+      validation_errors: "{{ validation_errors | tojson }}"
+      discharge_targets: "{{ discharge_targets | tojson }}"
+      charge_targets: "{{ charge_targets | tojson }}"
+      neutral_targets: "{{ neutral_targets | tojson }}"
+      slots: "{{ run_log_slots_json }}"
+
   - alias: "[[trace.validation_gate]]"
     choose:
       - alias: "[[trace.small_delta_branch]]"
@@ -385,6 +593,33 @@ actions:
           - alias: "[[trace.stop_invalid_sensor]]"
             stop: >-
               [[message.invalid_sensor]]
+
+  - alias: "[[trace.assist_monitor_gate]]"
+    choose:
+      - alias: "[[trace.assist_monitor_branch]]"
+        conditions:
+          - condition: template
+            value_template: "{{ assist_overshoot_detected }}"
+        sequence:
+          - alias: "[[trace.assist_monitor_event]]"
+            event: home_battery_blueprint_assist_overshoot
+            event_data:
+              operating_mode: "{{ operating_mode }}"
+              house_power_w: "{{ house_power_w | float(0) | round(1) }}"
+              adjusted_house_power_w: "{{ adjusted_house_power_w | float(0) | round(1) }}"
+              import_need_w: "{{ import_need_w | float(0) | round(1) }}"
+              export_surplus_w: "{{ export_surplus_w | float(0) | round(1) }}"
+              assist_w: "{{ discharge_assist_w | float(0) | round(1) }}"
+              priority_slots: "{{ discharge_assist_priority_slots }}"
+              helper_slots: "{{ discharge_assist_helper_slots }}"
+              discharge_target_1: "{{ discharge_target_1 | float(0) | round(0) }}"
+              discharge_target_2: "{{ discharge_target_2 | float(0) | round(0) }}"
+              discharge_target_3: "{{ discharge_target_3 | float(0) | round(0) }}"
+              discharge_target_4: "{{ discharge_target_4 | float(0) | round(0) }}"
+              actual_discharge_1: "{{ slot_1_actual_discharge_w | float(0) | round(1) }}"
+              actual_discharge_2: "{{ slot_2_actual_discharge_w | float(0) | round(1) }}"
+              actual_discharge_3: "{{ slot_3_actual_discharge_w | float(0) | round(1) }}"
+              actual_discharge_4: "{{ slot_4_actual_discharge_w | float(0) | round(1) }}"
 
   # Generated slot actions keep the signed target entity updated and
   # optionally run active-mode custom actions for charge/discharge integrations.
