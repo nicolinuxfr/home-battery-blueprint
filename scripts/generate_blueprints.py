@@ -344,6 +344,12 @@ desired_target_sign___SLOT__: >-
 current_target_rounded___SLOT__: "{{ slot___SLOT___current_target_w | float(0) | round(0) | int(0) }}"
 desired_target_rounded___SLOT__: "{{ signed_target___SLOT__ | float(0) | round(0) | int(0) }}"
 target_value_changed___SLOT__: "{{ desired_target_rounded___SLOT__ | int(0) != current_target_rounded___SLOT__ | int(0) }}"
+same_direction_target_delta_w___SLOT__: "{{ (desired_target_rounded___SLOT__ | int(0) - current_target_rounded___SLOT__ | int(0)) | abs }}"
+same_direction_small_adjustment___SLOT__: >-
+  {{ target_value_changed___SLOT__ | bool
+     and desired_target_sign___SLOT__ | int(0) != 0
+     and desired_target_sign___SLOT__ | int(0) == slot___SLOT___current_target_sign | int(0)
+     and same_direction_target_delta_w___SLOT__ | float(0) < minimum_target_delta_w | float(0) }}
 should_write_target_power___SLOT__: >-
   {% if not slot___SLOT___target_entity_configured %}
     false
@@ -357,6 +363,8 @@ should_write_target_power___SLOT__: >-
         and slot___SLOT___current_target_sign | int(0) != 0 %}
     true
   {% elif not (target_value_changed___SLOT__ | bool) %}
+    false
+  {% elif same_direction_small_adjustment___SLOT__ | bool and not (discharge_export_guard_active | bool) %}
     false
   {% elif signed_target___SLOT__ | float(0) > 0 %}
     {{ discharge_cooldown_ok___SLOT__
@@ -375,6 +383,8 @@ should_run_discharge_actions___SLOT__: >-
     true
   {% elif not (target_value_changed___SLOT__ | bool) %}
     false
+  {% elif same_direction_small_adjustment___SLOT__ | bool and not (discharge_export_guard_active | bool) %}
+    false
   {% else %}
     {{ discharge_cooldown_ok___SLOT__
        or (discharge_export_guard_active
@@ -387,6 +397,8 @@ should_run_charge_actions___SLOT__: >-
   {% elif slot___SLOT___current_target_sign | int(0) != -1 %}
     true
   {% elif not (target_value_changed___SLOT__ | bool) %}
+    false
+  {% elif same_direction_small_adjustment___SLOT__ | bool %}
     false
   {% else %}
     {{ charge_cooldown_ok___SLOT__ }}

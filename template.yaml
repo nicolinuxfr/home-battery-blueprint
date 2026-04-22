@@ -48,6 +48,7 @@ variables:
   command_deadband_w: 60
   release_deadband_w: 80
   minimum_trigger_delta_w: 10
+  minimum_target_delta_w: 10
   near_full_priority_on_soc_pct: 90
   near_full_priority_off_soc_pct: 80
 
