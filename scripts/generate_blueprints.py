@@ -234,7 +234,6 @@ slot___SLOT___discharge_delivery_stalled: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% set actual_discharge = slot___SLOT___actual_discharge_w | float(0) %}
   {% if current_target <= 0
-        or not (slot___SLOT___priority_requested | bool)
         or not (slot___SLOT___actual_power_fresh | bool)
         or slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
     false
@@ -242,7 +241,7 @@ slot___SLOT___discharge_delivery_stalled: >-
     {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
   {% endif %}
 slot___SLOT___charge_delivery_stalled: "false"
-slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 }}"
+slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 and not (slot___SLOT___discharge_delivery_stalled | bool) }}"
 slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 }}"
 """.strip()
 
