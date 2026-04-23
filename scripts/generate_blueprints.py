@@ -320,8 +320,8 @@ charge_cooldown_ok___SLOT__: >-
 
 
 SLOT_COMMAND_TEMPLATE = """
-discharge_active___SLOT__: "{{ operating_mode == 'discharge' and discharge_target___SLOT__ >= command_deadband_w }}"
-charge_active___SLOT__: "{{ operating_mode == 'charge' and charge_target___SLOT__ >= command_deadband_w }}"
+discharge_active___SLOT__: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target___SLOT__ >= command_deadband_w }}"
+charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold'] or emergency_charge_active | bool) and charge_target___SLOT__ >= command_deadband_w }}"
 neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target___SLOT__ | abs >= command_deadband_w }}"
 signed_target___SLOT__: >-
   {% if discharge_active___SLOT__ %}
