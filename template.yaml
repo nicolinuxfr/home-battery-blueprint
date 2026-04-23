@@ -42,6 +42,16 @@ triggers:
   - trigger: state
     entity_id: !input blocking_entities
 
+conditions:
+  - condition: template
+    value_template: >-
+      {% set blockers = expand(blocking_entities) %}
+      {% set blocked = blockers | selectattr('state', 'ne', 'off') | list | count > 0 %}
+      {% set trigger_entity = trigger.entity_id if trigger is defined and trigger.platform == 'state' and trigger.entity_id is defined else '' %}
+      {% set blocker_trigger = trigger_entity in blocking_entities %}
+      {% set blocker_entered_blocked = blocker_trigger and trigger.to_state is not none and trigger.to_state.state != 'off' %}
+      {{ not blocked or blocker_entered_blocked }}
+
 variables:
   house_power_sensor: !input house_power_sensor
   blocking_entities: !input blocking_entities
@@ -564,6 +574,7 @@ variables:
         'actual_discharge_w': slot_1_actual_discharge_w | float(0),
         'actual_charge_w': slot_1_actual_charge_w | float(0),
         'actual_power_fresh': slot_1_actual_power_fresh | bool,
+        'actual_power_age_s': slot_1_actual_power_age_s | float(999999),
         'target_age_s': slot_1_target_age_s | float(0),
         'response_grace_s': slot_1_response_grace_s | float(0),
         'discharge_locked': (not (discharge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) > 0,
@@ -587,6 +598,7 @@ variables:
         'actual_discharge_w': slot_2_actual_discharge_w | float(0),
         'actual_charge_w': slot_2_actual_charge_w | float(0),
         'actual_power_fresh': slot_2_actual_power_fresh | bool,
+        'actual_power_age_s': slot_2_actual_power_age_s | float(999999),
         'target_age_s': slot_2_target_age_s | float(0),
         'response_grace_s': slot_2_response_grace_s | float(0),
         'discharge_locked': (not (discharge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) > 0,
@@ -610,6 +622,7 @@ variables:
         'actual_discharge_w': slot_3_actual_discharge_w | float(0),
         'actual_charge_w': slot_3_actual_charge_w | float(0),
         'actual_power_fresh': slot_3_actual_power_fresh | bool,
+        'actual_power_age_s': slot_3_actual_power_age_s | float(999999),
         'target_age_s': slot_3_target_age_s | float(0),
         'response_grace_s': slot_3_response_grace_s | float(0),
         'discharge_locked': (not (discharge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) > 0,
@@ -633,6 +646,7 @@ variables:
         'actual_discharge_w': slot_4_actual_discharge_w | float(0),
         'actual_charge_w': slot_4_actual_charge_w | float(0),
         'actual_power_fresh': slot_4_actual_power_fresh | bool,
+        'actual_power_age_s': slot_4_actual_power_age_s | float(999999),
         'target_age_s': slot_4_target_age_s | float(0),
         'response_grace_s': slot_4_response_grace_s | float(0),
         'discharge_locked': (not (discharge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) > 0,
