@@ -303,35 +303,21 @@ variables:
     {% if operating_mode == 'discharge' %}
       {% for battery in batteries %}
         {% if battery.discharge_locked %}
-          {% set allocation = [battery.current_discharge, battery.max_discharge] | min %}
-          {% set allocation = [allocation, 0] | max %}
-          {% if battery.slot == 1 %}
-            {% set ns.t1 = allocation | round(0) %}
-          {% elif battery.slot == 2 %}
-            {% set ns.t2 = allocation | round(0) %}
-          {% elif battery.slot == 3 %}
-            {% set ns.t3 = allocation | round(0) %}
-          {% elif battery.slot == 4 %}
-            {% set ns.t4 = allocation | round(0) %}
-          {% endif %}
-          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
-        {% endif %}
-      {% endfor %}
-      {% for battery in batteries %}
-        {% if not battery.discharge_locked %}
+          {% set allocation = [battery.current_discharge, battery.max_discharge, ns.remaining] | min %}
+        {% else %}
           {% set allocation = [battery.max_discharge, ns.remaining] | min %}
-          {% set allocation = [allocation, 0] | max %}
-          {% if battery.slot == 1 %}
-            {% set ns.t1 = allocation | round(0) %}
-          {% elif battery.slot == 2 %}
-            {% set ns.t2 = allocation | round(0) %}
-          {% elif battery.slot == 3 %}
-            {% set ns.t3 = allocation | round(0) %}
-          {% elif battery.slot == 4 %}
-            {% set ns.t4 = allocation | round(0) %}
-          {% endif %}
-          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
         {% endif %}
+        {% set allocation = [allocation, 0] | max %}
+        {% if battery.slot == 1 %}
+          {% set ns.t1 = allocation | round(0) %}
+        {% elif battery.slot == 2 %}
+          {% set ns.t2 = allocation | round(0) %}
+        {% elif battery.slot == 3 %}
+          {% set ns.t3 = allocation | round(0) %}
+        {% elif battery.slot == 4 %}
+          {% set ns.t4 = allocation | round(0) %}
+        {% endif %}
+        {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
       {% endfor %}
       {% for battery in batteries %}
         {% if battery.priority and battery.actual_power_fresh %}
