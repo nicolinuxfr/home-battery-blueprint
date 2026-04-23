@@ -62,6 +62,7 @@ variables:
   emergency_charge_threshold_w: 500
   near_full_priority_on_soc_pct: 90
   near_full_priority_off_soc_pct: 80
+  allow_confirmed_flow_start_from_zero: true
 
   [[generated.slot_bindings]]
 
@@ -635,6 +636,7 @@ variables:
         'discharge_available': (slot_1_can_discharge | bool) and not (slot_1_discharge_delivery_stalled | bool),
         'discharge_locked': (not (discharge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) > 0 and not (slot_1_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) < 0,
+        'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_1 | bool,
         'should_write_target': should_write_target_power_1 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_1 | bool,
         'should_run_charge_actions': should_run_charge_actions_1 | bool
@@ -661,6 +663,7 @@ variables:
         'discharge_available': (slot_2_can_discharge | bool) and not (slot_2_discharge_delivery_stalled | bool),
         'discharge_locked': (not (discharge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) > 0 and not (slot_2_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) < 0,
+        'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_2 | bool,
         'should_write_target': should_write_target_power_2 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_2 | bool,
         'should_run_charge_actions': should_run_charge_actions_2 | bool
@@ -687,6 +690,7 @@ variables:
         'discharge_available': (slot_3_can_discharge | bool) and not (slot_3_discharge_delivery_stalled | bool),
         'discharge_locked': (not (discharge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) > 0 and not (slot_3_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) < 0,
+        'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_3 | bool,
         'should_write_target': should_write_target_power_3 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_3 | bool,
         'should_run_charge_actions': should_run_charge_actions_3 | bool
@@ -713,6 +717,7 @@ variables:
         'discharge_available': (slot_4_can_discharge | bool) and not (slot_4_discharge_delivery_stalled | bool),
         'discharge_locked': (not (discharge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) > 0 and not (slot_4_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) < 0,
+        'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_4 | bool,
         'should_write_target': should_write_target_power_4 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_4 | bool,
         'should_run_charge_actions': should_run_charge_actions_4 | bool

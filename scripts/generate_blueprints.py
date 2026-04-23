@@ -350,6 +350,18 @@ same_direction_small_adjustment___SLOT__: >-
      and desired_target_sign___SLOT__ | int(0) != 0
      and desired_target_sign___SLOT__ | int(0) == slot___SLOT___current_target_sign | int(0)
      and same_direction_target_delta_w___SLOT__ | float(0) < minimum_target_delta_w | float(0) }}
+start_from_zero_flow_confirmed___SLOT__: >-
+  {{ slot___SLOT___current_target_sign | int(0) == 0
+     and allow_confirmed_flow_start_from_zero | bool
+     and (
+       (desired_target_sign___SLOT__ | int(0) == 1
+        and house_power_valid
+        and house_power_w | float(0) >= command_deadband_w | float(0))
+       or
+       (desired_target_sign___SLOT__ | int(0) == -1
+        and house_power_valid
+        and house_power_w | float(0) <= 0 - (command_deadband_w | float(0)))
+     ) }}
 should_write_target_power___SLOT__: >-
   {% if not slot___SLOT___target_entity_configured %}
     false
@@ -366,6 +378,8 @@ should_write_target_power___SLOT__: >-
     false
   {% elif same_direction_small_adjustment___SLOT__ | bool and not (discharge_export_guard_active | bool) %}
     false
+  {% elif start_from_zero_flow_confirmed___SLOT__ | bool %}
+    true
   {% elif signed_target___SLOT__ | float(0) > 0 %}
     {{ discharge_cooldown_ok___SLOT__
        or (discharge_export_guard_active
@@ -380,7 +394,8 @@ should_run_discharge_actions___SLOT__: >-
   {% if not slot___SLOT___has_discharge_actions or signed_target___SLOT__ | float(0) <= 0 %}
     false
   {% elif slot___SLOT___current_target_sign | int(0) != 1 %}
-    true
+    {{ start_from_zero_flow_confirmed___SLOT__ | bool
+       or slot___SLOT___current_target_sign | int(0) != 0 }}
   {% elif not (target_value_changed___SLOT__ | bool) %}
     false
   {% elif same_direction_small_adjustment___SLOT__ | bool and not (discharge_export_guard_active | bool) %}
@@ -395,7 +410,8 @@ should_run_charge_actions___SLOT__: >-
   {% if not slot___SLOT___has_charge_actions or signed_target___SLOT__ | float(0) >= 0 %}
     false
   {% elif slot___SLOT___current_target_sign | int(0) != -1 %}
-    true
+    {{ start_from_zero_flow_confirmed___SLOT__ | bool
+       or slot___SLOT___current_target_sign | int(0) != 0 }}
   {% elif not (target_value_changed___SLOT__ | bool) %}
     false
   {% elif same_direction_small_adjustment___SLOT__ | bool %}
