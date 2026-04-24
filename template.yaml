@@ -459,10 +459,10 @@ variables:
   discharge_targets: "{{ discharge_plan['targets'] }}"
   unresolved_raw_export_w: "{{ discharge_plan['unresolved_raw_export_w'] | float(0) }}"
   emergency_charge_surplus_w: >-
-    {% if operating_mode in ['discharge', 'discharge_hold', 'charge']
+    {% if operating_mode in ['discharge', 'discharge_hold']
           and charge_capable_count | int(0) > 0
-          and unresolved_raw_export_w | float(0) >= emergency_charge_threshold_w | float(0) %}
-      {{ unresolved_raw_export_w | float(0) }}
+          and raw_export_w | float(0) >= emergency_charge_threshold_w | float(0) %}
+      {{ raw_export_w | float(0) }}
     {% else %}
       0
     {% endif %}
@@ -636,6 +636,7 @@ variables:
         'actual_charge_w': slot_1_actual_charge_w | float(0),
         'actual_power_fresh': slot_1_actual_power_fresh | bool,
         'actual_power_stale': slot_1_actual_power_stale | bool,
+        'actual_power_usable': slot_1_actual_power_usable | bool,
         'actual_power_age_s': slot_1_actual_power_age_s | float(999999),
         'target_age_s': slot_1_target_age_s | float(0),
         'response_grace_s': slot_1_response_grace_s | float(0),
@@ -664,6 +665,7 @@ variables:
         'actual_charge_w': slot_2_actual_charge_w | float(0),
         'actual_power_fresh': slot_2_actual_power_fresh | bool,
         'actual_power_stale': slot_2_actual_power_stale | bool,
+        'actual_power_usable': slot_2_actual_power_usable | bool,
         'actual_power_age_s': slot_2_actual_power_age_s | float(999999),
         'target_age_s': slot_2_target_age_s | float(0),
         'response_grace_s': slot_2_response_grace_s | float(0),
@@ -692,6 +694,7 @@ variables:
         'actual_charge_w': slot_3_actual_charge_w | float(0),
         'actual_power_fresh': slot_3_actual_power_fresh | bool,
         'actual_power_stale': slot_3_actual_power_stale | bool,
+        'actual_power_usable': slot_3_actual_power_usable | bool,
         'actual_power_age_s': slot_3_actual_power_age_s | float(999999),
         'target_age_s': slot_3_target_age_s | float(0),
         'response_grace_s': slot_3_response_grace_s | float(0),
@@ -720,6 +723,7 @@ variables:
         'actual_charge_w': slot_4_actual_charge_w | float(0),
         'actual_power_fresh': slot_4_actual_power_fresh | bool,
         'actual_power_stale': slot_4_actual_power_stale | bool,
+        'actual_power_usable': slot_4_actual_power_usable | bool,
         'actual_power_age_s': slot_4_actual_power_age_s | float(999999),
         'target_age_s': slot_4_target_age_s | float(0),
         'response_grace_s': slot_4_response_grace_s | float(0),

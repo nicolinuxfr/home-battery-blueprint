@@ -175,17 +175,24 @@ slot___SLOT___actual_power_w: >-
   {% else %}
     {{ slot___SLOT___actual_power_state | float(0) }}
   {% endif %}
+slot___SLOT___actual_power_valid: "{{ slot___SLOT___actual_power_sensor_configured | bool and is_number(slot___SLOT___actual_power_state) }}"
 slot___SLOT___actual_discharge_w: "{{ [slot___SLOT___actual_power_w | float(0), 0] | max }}"
 slot___SLOT___actual_charge_w: "{{ [0 - (slot___SLOT___actual_power_w | float(0)), 0] | max }}"
 slot___SLOT___actual_power_fresh: >-
-  {% if not slot___SLOT___actual_power_sensor_configured %}
+  {% if not (slot___SLOT___actual_power_valid | bool) %}
     false
   {% else %}
     {{ slot___SLOT___actual_power_age_s | float(999999) <= [slot___SLOT___response_grace_s | float(0), 45] | max }}
   {% endif %}
 slot___SLOT___actual_power_stale: >-
   {{ slot___SLOT___actual_power_sensor_configured | bool
-     and slot___SLOT___actual_power_age_s | float(999999) > actual_power_stale_timeout_s | float(0) }}
+     and (
+       not (slot___SLOT___actual_power_valid | bool)
+       or slot___SLOT___actual_power_age_s | float(999999) > actual_power_stale_timeout_s | float(0)
+     ) }}
+slot___SLOT___actual_power_usable: >-
+  {{ slot___SLOT___actual_power_valid | bool
+     and not (slot___SLOT___actual_power_stale | bool) }}
 slot___SLOT___high_soc_priority_active: >-
   {% set soc = slot___SLOT___soc | float(0) %}
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
@@ -219,7 +226,7 @@ slot___SLOT___effective_balance_power: >-
     {{ current_target }}
   {% elif slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
     {{ current_target }}
-  {% elif slot___SLOT___actual_power_fresh | bool %}
+  {% elif slot___SLOT___actual_power_usable | bool %}
     {% if current_target > 0 %}
       {{ slot___SLOT___actual_discharge_w | float(0) }}
     {% else %}
@@ -249,10 +256,10 @@ slot___SLOT___discharge_delivery_stalled: >-
     false
   {% elif slot___SLOT___actual_power_stale | bool %}
     true
-  {% elif not (slot___SLOT___actual_power_fresh | bool) %}
-    false
-  {% else %}
+  {% elif slot___SLOT___actual_power_usable | bool %}
     {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
+  {% else %}
+    false
   {% endif %}
 slot___SLOT___charge_delivery_stalled: "false"
 slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 }}"
@@ -303,6 +310,7 @@ SLOT_BATTERIES_TEMPLATE = """
     'current_charge': reserved_charge,
     'actual_power_fresh': slot___SLOT___actual_power_fresh | bool,
     'actual_power_stale': slot___SLOT___actual_power_stale | bool,
+    'actual_power_usable': slot___SLOT___actual_power_usable | bool,
     'actual_discharge': slot___SLOT___actual_discharge_w | float(0),
     'target_age_s': slot___SLOT___target_age_s | float(0),
     'response_grace_s': slot___SLOT___response_grace_s | float(0),
