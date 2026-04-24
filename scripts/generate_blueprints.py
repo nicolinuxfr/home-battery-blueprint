@@ -381,6 +381,11 @@ start_from_zero_flow_confirmed___SLOT__: >-
         and house_power_valid
         and house_power_w | float(0) <= 0 - (command_deadband_w | float(0)))
      ) }}
+discharge_increase_blocked_by_locked_reduction___SLOT__: >-
+  {{ locked_discharge_reduction_pending | bool
+     and signed_target___SLOT__ | float(0) > slot___SLOT___current_target_w | float(0)
+     and signed_target___SLOT__ | float(0) > 0
+     and not (discharge_export_guard_active | bool) }}
 should_write_target_power___SLOT__: >-
   {% if not slot___SLOT___target_entity_configured %}
     false
@@ -397,6 +402,8 @@ should_write_target_power___SLOT__: >-
     false
   {% elif same_direction_small_adjustment___SLOT__ | bool and not (discharge_export_guard_active | bool) %}
     false
+  {% elif discharge_increase_blocked_by_locked_reduction___SLOT__ | bool %}
+    false
   {% elif start_from_zero_flow_confirmed___SLOT__ | bool %}
     true
   {% elif signed_target___SLOT__ | float(0) > 0 %}
@@ -411,6 +418,8 @@ should_write_target_power___SLOT__: >-
   {% endif %}
 should_run_discharge_actions___SLOT__: >-
   {% if not slot___SLOT___has_discharge_actions or signed_target___SLOT__ | float(0) <= 0 %}
+    false
+  {% elif discharge_increase_blocked_by_locked_reduction___SLOT__ | bool %}
     false
   {% elif slot___SLOT___current_target_sign | int(0) != 1 %}
     {{ start_from_zero_flow_confirmed___SLOT__ | bool

@@ -583,6 +583,34 @@ variables:
   neutral_target_3: "{{ neutral_targets['3'] | float(0) }}"
   neutral_target_4: "{{ neutral_targets['4'] | float(0) }}"
 
+  locked_discharge_reduction_pending: >-
+    {{
+      (
+        slot_1_current_target_w | float(0) > 0
+        and discharge_target_1 | float(0) >= command_deadband_w | float(0)
+        and discharge_target_1 | float(0) < slot_1_current_target_w | float(0) - minimum_target_delta_w | float(0)
+        and not (discharge_cooldown_ok_1 | bool)
+      )
+      or (
+        slot_2_current_target_w | float(0) > 0
+        and discharge_target_2 | float(0) >= command_deadband_w | float(0)
+        and discharge_target_2 | float(0) < slot_2_current_target_w | float(0) - minimum_target_delta_w | float(0)
+        and not (discharge_cooldown_ok_2 | bool)
+      )
+      or (
+        slot_3_current_target_w | float(0) > 0
+        and discharge_target_3 | float(0) >= command_deadband_w | float(0)
+        and discharge_target_3 | float(0) < slot_3_current_target_w | float(0) - minimum_target_delta_w | float(0)
+        and not (discharge_cooldown_ok_3 | bool)
+      )
+      or (
+        slot_4_current_target_w | float(0) > 0
+        and discharge_target_4 | float(0) >= command_deadband_w | float(0)
+        and discharge_target_4 | float(0) < slot_4_current_target_w | float(0) - minimum_target_delta_w | float(0)
+        and not (discharge_cooldown_ok_4 | bool)
+      )
+    }}
+
   [[generated.command_vars]]
   pending_slot_target_updates: >-
     {{
