@@ -130,7 +130,7 @@ variables:
   [[generated.slot_state_vars]]
 
   # Rebuild the underlying house demand from the net house meter plus the
-  # measured managed battery contribution when fresh telemetry is available.
+  # measured managed battery contribution when valid non-stale telemetry is available.
   # Allocation then keeps a separate temporary reservation of newly requested
   # target power during each battery response grace period so a slow priority
   # battery keeps ownership of the power it has just been asked to provide,
@@ -326,7 +326,7 @@ variables:
       {% endfor %}
       {% if assist_allowed %}
         {% for battery in batteries %}
-          {% if battery.priority and battery.actual_power_fresh %}
+          {% if battery.priority and battery.actual_power_usable %}
             {% set desired_allocation = 0 %}
             {% if battery.slot == 1 %}
               {% set desired_allocation = ns.t1 | float(0) %}

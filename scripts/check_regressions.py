@@ -25,6 +25,7 @@ def discharge_increase_blocked_by_locked_reduction(
     *,
     current_target_w: float,
     signed_target_w: float,
+    house_power_w: float,
     locked_reduction_pending: bool,
     export_guard_active: bool,
 ) -> bool:
@@ -32,8 +33,32 @@ def discharge_increase_blocked_by_locked_reduction(
         locked_reduction_pending
         and signed_target_w > current_target_w
         and signed_target_w > 0
+        and (signed_target_w - current_target_w) > max(house_power_w, 0)
         and not export_guard_active
     )
+
+
+def priority_assist_gap(
+    *,
+    desired_allocation_w: float,
+    current_discharge_w: float,
+    actual_discharge_w: float,
+    target_age_s: float,
+    response_grace_s: float,
+    discharge_locked: bool,
+    priority: bool,
+    actual_power_usable: bool,
+) -> float:
+    ramping_now = desired_allocation_w > current_discharge_w
+    still_ramping = discharge_locked and target_age_s < response_grace_s
+    if (
+        priority
+        and actual_power_usable
+        and desired_allocation_w > actual_discharge_w
+        and (ramping_now or still_ramping)
+    ):
+        return max(desired_allocation_w - actual_discharge_w, 0)
+    return 0
 
 
 def test_priority_increase_waits_for_locked_reduction() -> None:
@@ -50,15 +75,53 @@ def test_priority_increase_waits_for_locked_reduction() -> None:
     assert discharge_increase_blocked_by_locked_reduction(
         current_target_w=80,
         signed_target_w=1200,
+        house_power_w=60.1,
         locked_reduction_pending=pending,
         export_guard_active=False,
     )
+
+
+def test_real_import_allows_matching_increase() -> None:
+    assert not discharge_increase_blocked_by_locked_reduction(
+        current_target_w=0,
+        signed_target_w=645,
+        house_power_w=645,
+        locked_reduction_pending=True,
+        export_guard_active=False,
+    )
+
+
+def test_non_fresh_usable_priority_telemetry_still_assists() -> None:
+    assert priority_assist_gap(
+        desired_allocation_w=1200,
+        current_discharge_w=920,
+        actual_discharge_w=540,
+        target_age_s=20,
+        response_grace_s=60,
+        discharge_locked=True,
+        priority=True,
+        actual_power_usable=True,
+    ) == 660
+
+
+def test_stale_priority_telemetry_does_not_assist() -> None:
+    assert priority_assist_gap(
+        desired_allocation_w=1200,
+        current_discharge_w=920,
+        actual_discharge_w=540,
+        target_age_s=20,
+        response_grace_s=60,
+        discharge_locked=True,
+        priority=True,
+        actual_power_usable=False,
+    ) == 0
 
 
 def test_export_guard_still_allows_corrections() -> None:
     assert not discharge_increase_blocked_by_locked_reduction(
         current_target_w=80,
         signed_target_w=1200,
+        house_power_w=60.1,
         locked_reduction_pending=True,
         export_guard_active=True,
     )
@@ -66,6 +129,9 @@ def test_export_guard_still_allows_corrections() -> None:
 
 def main() -> int:
     test_priority_increase_waits_for_locked_reduction()
+    test_real_import_allows_matching_increase()
+    test_non_fresh_usable_priority_telemetry_still_assists()
+    test_stale_priority_telemetry_does_not_assist()
     test_export_guard_still_allows_corrections()
     print("Regression checks passed.")
     return 0

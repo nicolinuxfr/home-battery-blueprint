@@ -385,6 +385,7 @@ discharge_increase_blocked_by_locked_reduction___SLOT__: >-
   {{ locked_discharge_reduction_pending | bool
      and signed_target___SLOT__ | float(0) > slot___SLOT___current_target_w | float(0)
      and signed_target___SLOT__ | float(0) > 0
+     and (signed_target___SLOT__ | float(0) - slot___SLOT___current_target_w | float(0)) > [house_power_w | float(0), 0] | max
      and not (discharge_export_guard_active | bool) }}
 should_write_target_power___SLOT__: >-
   {% if not slot___SLOT___target_entity_configured %}
