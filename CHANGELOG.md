@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.4.5
+
+- Big simplification of the logic :
+  - No more priority battery, the SOC is only used ;
+  - The cooldown chooses the allocation : the slow batteries gets a conservative setpoint that won't move often, while the quick batteries fill the gaps.
+
 ## 2026.4.4
 
 - Many bug fixes in the handling of batteries.

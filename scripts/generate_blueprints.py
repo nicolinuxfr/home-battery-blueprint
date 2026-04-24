@@ -48,12 +48,6 @@ battery___SLOT___section:
           step: 10
           unit_of_measurement: W
           mode: box
-    battery___SLOT___priority_discharge:
-      name: "[[input.battery.priority_discharge.name]]"
-      description: "[[input.battery.priority_discharge.description]]"
-      default: false
-      selector:
-        boolean: {}
     battery___SLOT___cooldown_seconds:
       name: "[[input.battery.cooldown_seconds.name]]"
       description: "[[input.battery.cooldown_seconds.description]]"
@@ -102,7 +96,6 @@ SLOT_BINDING_TEMPLATE = """
 battery___SLOT___soc_sensor: !input battery___SLOT___soc_sensor
 battery___SLOT___max_discharge_w: !input battery___SLOT___max_discharge_w
 battery___SLOT___max_charge_w: !input battery___SLOT___max_charge_w
-battery___SLOT___priority_discharge: !input battery___SLOT___priority_discharge
 battery___SLOT___cooldown_seconds: !input battery___SLOT___cooldown_seconds
 battery___SLOT___target_power_entity: !input battery___SLOT___target_power_entity
 battery___SLOT___actual_power_sensor: !input battery___SLOT___actual_power_sensor
@@ -193,31 +186,6 @@ slot___SLOT___actual_power_stale: >-
 slot___SLOT___actual_power_usable: >-
   {{ slot___SLOT___actual_power_valid | bool
      and not (slot___SLOT___actual_power_stale | bool) }}
-slot___SLOT___high_soc_priority_active: >-
-  {% set soc = slot___SLOT___soc | float(0) %}
-  {% set current_target = slot___SLOT___current_target_w | float(0) %}
-  {% set actual_power = slot___SLOT___actual_power_w | float(0) %}
-  {% if not slot___SLOT___used %}
-    false
-  {% elif soc >= near_full_priority_on_soc_pct | float(0) %}
-    true
-  {% elif soc <= near_full_priority_off_soc_pct | float(0) %}
-    false
-  {% else %}
-    {{ current_target != 0
-       or ((slot___SLOT___actual_power_fresh | bool)
-           and (actual_power | abs) >= command_deadband_w | float(0)) }}
-  {% endif %}
-slot___SLOT___priority_requested: >-
-  {{ (battery___SLOT___priority_discharge | bool) or (slot___SLOT___high_soc_priority_active | bool) }}
-slot___SLOT___priority_rank: >-
-  {% if slot___SLOT___high_soc_priority_active | bool %}
-    2
-  {% elif battery___SLOT___priority_discharge | bool %}
-    1
-  {% else %}
-    0
-  {% endif %}
 slot___SLOT___effective_balance_power: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% if current_target == 0 %}
@@ -296,10 +264,6 @@ SLOT_BATTERIES_TEMPLATE = """
   {% set ns.items = ns.items + [{
     'slot': __SLOT__,
     'soc': slot___SLOT___soc | float(0),
-    'priority': (slot___SLOT___priority_requested | bool) and not (slot___SLOT___discharge_delivery_stalled | bool),
-    'configured_priority': battery___SLOT___priority_discharge | bool,
-    'high_soc_priority': slot___SLOT___high_soc_priority_active | bool,
-    'priority_rank': (slot___SLOT___priority_rank | int(0)) if not (slot___SLOT___discharge_delivery_stalled | bool) else 0,
     'cooldown_s': battery___SLOT___cooldown_seconds | float(0),
     'max_discharge': battery___SLOT___max_discharge_w | float(0),
     'max_charge': battery___SLOT___max_charge_w | float(0),
@@ -314,7 +278,7 @@ SLOT_BATTERIES_TEMPLATE = """
     'actual_discharge': slot___SLOT___actual_discharge_w | float(0),
     'target_age_s': slot___SLOT___target_age_s | float(0),
     'response_grace_s': slot___SLOT___response_grace_s | float(0),
-    'priority_delivery_stalled': slot___SLOT___discharge_delivery_stalled | bool,
+    'discharge_delivery_stalled': slot___SLOT___discharge_delivery_stalled | bool,
     'discharge_locked': slot___SLOT___can_discharge and not (slot___SLOT___discharge_delivery_stalled | bool) and current_target > 0 and not (discharge_cooldown_ok___SLOT__ | bool),
     'charge_locked': slot___SLOT___can_charge and current_target < 0 and not (charge_cooldown_ok___SLOT__ | bool)
   }] %}
