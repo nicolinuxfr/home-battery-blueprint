@@ -63,6 +63,7 @@ variables:
   near_full_priority_on_soc_pct: 90
   near_full_priority_off_soc_pct: 80
   allow_confirmed_flow_start_from_zero: true
+  actual_power_stale_timeout_s: 300
 
   [[generated.slot_bindings]]
 
@@ -629,6 +630,7 @@ variables:
         'actual_discharge_w': slot_1_actual_discharge_w | float(0),
         'actual_charge_w': slot_1_actual_charge_w | float(0),
         'actual_power_fresh': slot_1_actual_power_fresh | bool,
+        'actual_power_stale': slot_1_actual_power_stale | bool,
         'actual_power_age_s': slot_1_actual_power_age_s | float(999999),
         'target_age_s': slot_1_target_age_s | float(0),
         'response_grace_s': slot_1_response_grace_s | float(0),
@@ -656,6 +658,7 @@ variables:
         'actual_discharge_w': slot_2_actual_discharge_w | float(0),
         'actual_charge_w': slot_2_actual_charge_w | float(0),
         'actual_power_fresh': slot_2_actual_power_fresh | bool,
+        'actual_power_stale': slot_2_actual_power_stale | bool,
         'actual_power_age_s': slot_2_actual_power_age_s | float(999999),
         'target_age_s': slot_2_target_age_s | float(0),
         'response_grace_s': slot_2_response_grace_s | float(0),
@@ -683,6 +686,7 @@ variables:
         'actual_discharge_w': slot_3_actual_discharge_w | float(0),
         'actual_charge_w': slot_3_actual_charge_w | float(0),
         'actual_power_fresh': slot_3_actual_power_fresh | bool,
+        'actual_power_stale': slot_3_actual_power_stale | bool,
         'actual_power_age_s': slot_3_actual_power_age_s | float(999999),
         'target_age_s': slot_3_target_age_s | float(0),
         'response_grace_s': slot_3_response_grace_s | float(0),
@@ -710,6 +714,7 @@ variables:
         'actual_discharge_w': slot_4_actual_discharge_w | float(0),
         'actual_charge_w': slot_4_actual_charge_w | float(0),
         'actual_power_fresh': slot_4_actual_power_fresh | bool,
+        'actual_power_stale': slot_4_actual_power_stale | bool,
         'actual_power_age_s': slot_4_actual_power_age_s | float(999999),
         'target_age_s': slot_4_target_age_s | float(0),
         'response_grace_s': slot_4_response_grace_s | float(0),

@@ -183,6 +183,9 @@ slot___SLOT___actual_power_fresh: >-
   {% else %}
     {{ slot___SLOT___actual_power_age_s | float(999999) <= [slot___SLOT___response_grace_s | float(0), 45] | max }}
   {% endif %}
+slot___SLOT___actual_power_stale: >-
+  {{ slot___SLOT___actual_power_sensor_configured | bool
+     and slot___SLOT___actual_power_age_s | float(999999) > actual_power_stale_timeout_s | float(0) }}
 slot___SLOT___high_soc_priority_active: >-
   {% set soc = slot___SLOT___soc | float(0) %}
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
@@ -210,14 +213,22 @@ slot___SLOT___priority_rank: >-
   {% endif %}
 slot___SLOT___effective_balance_power: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
-  {% if not (slot___SLOT___actual_power_fresh | bool) %}
-    {{ current_target }}
-  {% elif current_target > 0 %}
-    {{ slot___SLOT___actual_discharge_w | float(0) }}
-  {% elif current_target < 0 %}
-    {{ 0 - (slot___SLOT___actual_charge_w | float(0)) }}
-  {% else %}
+  {% if current_target == 0 %}
     0
+  {% elif not (slot___SLOT___actual_power_sensor_configured | bool) %}
+    {{ current_target }}
+  {% elif slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
+    {{ current_target }}
+  {% elif slot___SLOT___actual_power_fresh | bool %}
+    {% if current_target > 0 %}
+      {{ slot___SLOT___actual_discharge_w | float(0) }}
+    {% else %}
+      {{ 0 - (slot___SLOT___actual_charge_w | float(0)) }}
+    {% endif %}
+  {% elif slot___SLOT___actual_power_stale | bool %}
+    0
+  {% else %}
+    {{ current_target }}
   {% endif %}
 slot___SLOT___reserved_balance_power: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
@@ -234,8 +245,11 @@ slot___SLOT___discharge_delivery_stalled: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% set actual_discharge = slot___SLOT___actual_discharge_w | float(0) %}
   {% if current_target <= 0
-        or not (slot___SLOT___actual_power_fresh | bool)
         or slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
+    false
+  {% elif slot___SLOT___actual_power_stale | bool %}
+    true
+  {% elif not (slot___SLOT___actual_power_fresh | bool) %}
     false
   {% else %}
     {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
@@ -288,6 +302,7 @@ SLOT_BATTERIES_TEMPLATE = """
     'current_discharge': reserved_discharge,
     'current_charge': reserved_charge,
     'actual_power_fresh': slot___SLOT___actual_power_fresh | bool,
+    'actual_power_stale': slot___SLOT___actual_power_stale | bool,
     'actual_discharge': slot___SLOT___actual_discharge_w | float(0),
     'target_age_s': slot___SLOT___target_age_s | float(0),
     'response_grace_s': slot___SLOT___response_grace_s | float(0),
