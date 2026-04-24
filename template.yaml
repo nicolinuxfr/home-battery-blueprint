@@ -459,10 +459,10 @@ variables:
   discharge_targets: "{{ discharge_plan['targets'] }}"
   unresolved_raw_export_w: "{{ discharge_plan['unresolved_raw_export_w'] | float(0) }}"
   emergency_charge_surplus_w: >-
-    {% if operating_mode in ['discharge', 'discharge_hold']
+    {% if operating_mode in ['discharge', 'discharge_hold', 'charge']
           and charge_capable_count | int(0) > 0
-          and raw_export_w | float(0) >= emergency_charge_threshold_w | float(0) %}
-      {{ raw_export_w | float(0) }}
+          and unresolved_raw_export_w | float(0) >= emergency_charge_threshold_w | float(0) %}
+      {{ unresolved_raw_export_w | float(0) }}
     {% else %}
       0
     {% endif %}

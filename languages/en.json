@@ -45,7 +45,7 @@
   "input.battery.max_discharge_w.name": "Maximum discharge power",
   "input.battery.max_discharge_w.description": "Manual discharge limit used by the allocator for this battery.",
   "input.battery.max_charge_w.name": "Maximum charge power",
-  "input.battery.max_charge_w.description": "Manual charge limit used by the allocator for opportunistic charging. Charge-capable batteries can absorb real export while discharge targets are being reduced, as long as they no longer receive a discharge target in the current run. Set to 0 if this battery must never be charged by the blueprint.",
+  "input.battery.max_charge_w.description": "Manual charge limit used by the allocator for opportunistic charging. Charge-capable batteries can absorb residual real export once discharge targets have been trimmed down to the release threshold. Set to 0 if this battery must never be charged by the blueprint.",
   "input.battery.priority_discharge.name": "Priority on discharge",
   "input.battery.priority_discharge.description": "Prioritized batteries are discharged first, ordered by their state of charge. Non-priority batteries come afterwards, also ordered by state of charge. To preserve headroom automatically, any battery that reaches 90% state of charge is promoted into a stronger temporary priority tier until it drops below 80% while it stays active.",
   "input.battery.cooldown_seconds.name": "Command cooldown",
