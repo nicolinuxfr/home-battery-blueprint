@@ -251,11 +251,11 @@ slot___SLOT___has_charge_actions: "{{ battery___SLOT___charge_actions | count > 
 slot___SLOT___discharge_delivery_stalled: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% set actual_discharge = slot___SLOT___actual_discharge_w | float(0) %}
-  {% if current_target <= 0
+  {% if slot___SLOT___actual_power_stale | bool %}
+    true
+  {% elif current_target <= 0
         or slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
     false
-  {% elif slot___SLOT___actual_power_stale | bool %}
-    true
   {% elif slot___SLOT___actual_power_usable | bool %}
     {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
   {% else %}

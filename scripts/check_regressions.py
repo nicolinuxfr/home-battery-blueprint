@@ -81,6 +81,24 @@ def export_trimmed_allocation(
     return current_allocation_w - trim_allocation, max(trim_remaining_w - trim_allocation, 0)
 
 
+def discharge_delivery_stalled(
+    *,
+    current_target_w: float,
+    actual_discharge_w: float,
+    target_age_s: float,
+    response_grace_s: float,
+    actual_power_stale: bool,
+    actual_power_usable: bool,
+) -> bool:
+    if actual_power_stale:
+        return True
+    if current_target_w <= 0 or target_age_s < response_grace_s:
+        return False
+    if actual_power_usable:
+        return actual_discharge_w <= 50 and (current_target_w - actual_discharge_w) > 50
+    return False
+
+
 def test_priority_increase_waits_for_locked_reduction() -> None:
     # Captured from home_battery_blueprint_runs (8).jsonl at 2026-04-24 14:42:35.
     # Battery 1 wanted to jump from 80 W to 1200 W while battery 3 needed to
@@ -186,6 +204,28 @@ def test_export_guard_still_allows_corrections() -> None:
     )
 
 
+def test_stale_actual_power_blocks_new_discharge_allocation() -> None:
+    assert discharge_delivery_stalled(
+        current_target_w=0,
+        actual_discharge_w=0,
+        target_age_s=360,
+        response_grace_s=60,
+        actual_power_stale=True,
+        actual_power_usable=False,
+    )
+
+
+def test_zero_target_without_stale_telemetry_remains_available() -> None:
+    assert not discharge_delivery_stalled(
+        current_target_w=0,
+        actual_discharge_w=0,
+        target_age_s=360,
+        response_grace_s=60,
+        actual_power_stale=False,
+        actual_power_usable=False,
+    )
+
+
 def main() -> int:
     test_priority_increase_waits_for_locked_reduction()
     test_real_import_allows_matching_increase()
@@ -195,6 +235,8 @@ def main() -> int:
     test_export_trim_still_cuts_when_pending_drop_is_not_fresh()
     test_export_trim_still_cuts_after_response_window()
     test_export_guard_still_allows_corrections()
+    test_stale_actual_power_blocks_new_discharge_allocation()
+    test_zero_target_without_stale_telemetry_remains_available()
     print("Regression checks passed.")
     return 0
 
