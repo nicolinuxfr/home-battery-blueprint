@@ -61,6 +61,26 @@ def priority_assist_gap(
     return 0
 
 
+def export_trimmed_allocation(
+    *,
+    current_allocation_w: float,
+    actual_discharge_w: float,
+    trim_remaining_w: float,
+    actual_power_fresh: bool,
+    target_age_s: float,
+    response_grace_s: float,
+) -> tuple[float, float]:
+    if (
+        actual_power_fresh
+        and target_age_s < response_grace_s
+        and actual_discharge_w > current_allocation_w + COMMAND_DEADBAND_W
+    ):
+        pending_actual_drop = min(actual_discharge_w - current_allocation_w, trim_remaining_w)
+        trim_remaining_w = max(trim_remaining_w - pending_actual_drop, 0)
+    trim_allocation = min(current_allocation_w, trim_remaining_w)
+    return current_allocation_w - trim_allocation, max(trim_remaining_w - trim_allocation, 0)
+
+
 def test_priority_increase_waits_for_locked_reduction() -> None:
     # Captured from home_battery_blueprint_runs (8).jsonl at 2026-04-24 14:42:35.
     # Battery 1 wanted to jump from 80 W to 1200 W while battery 3 needed to
@@ -117,6 +137,45 @@ def test_stale_priority_telemetry_does_not_assist() -> None:
     ) == 0
 
 
+def test_export_trim_credits_pending_actual_drop() -> None:
+    allocation, remaining = export_trimmed_allocation(
+        current_allocation_w=1827.1,
+        actual_discharge_w=3016,
+        trim_remaining_w=1108.9,
+        actual_power_fresh=True,
+        target_age_s=19.1,
+        response_grace_s=20,
+    )
+    assert round(allocation, 1) == 1827.1
+    assert remaining == 0
+
+
+def test_export_trim_still_cuts_when_pending_drop_is_not_fresh() -> None:
+    allocation, remaining = export_trimmed_allocation(
+        current_allocation_w=1827.1,
+        actual_discharge_w=3016,
+        trim_remaining_w=1108.9,
+        actual_power_fresh=False,
+        target_age_s=19.1,
+        response_grace_s=20,
+    )
+    assert round(allocation, 1) == 718.2
+    assert remaining == 0
+
+
+def test_export_trim_still_cuts_after_response_window() -> None:
+    allocation, remaining = export_trimmed_allocation(
+        current_allocation_w=1827.1,
+        actual_discharge_w=3016,
+        trim_remaining_w=1108.9,
+        actual_power_fresh=True,
+        target_age_s=21,
+        response_grace_s=20,
+    )
+    assert round(allocation, 1) == 718.2
+    assert remaining == 0
+
+
 def test_export_guard_still_allows_corrections() -> None:
     assert not discharge_increase_blocked_by_locked_reduction(
         current_target_w=80,
@@ -132,6 +191,9 @@ def main() -> int:
     test_real_import_allows_matching_increase()
     test_non_fresh_usable_priority_telemetry_still_assists()
     test_stale_priority_telemetry_does_not_assist()
+    test_export_trim_credits_pending_actual_drop()
+    test_export_trim_still_cuts_when_pending_drop_is_not_fresh()
+    test_export_trim_still_cuts_after_response_window()
     test_export_guard_still_allows_corrections()
     print("Regression checks passed.")
     return 0
