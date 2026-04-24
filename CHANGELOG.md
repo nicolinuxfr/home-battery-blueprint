@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.4.4
+
+- Many bug fixes in the handling of batteries.
+
 ## 2026.4.3
 
 - A battery that goes above 90 % is now considered a priority.
