@@ -64,6 +64,7 @@ variables:
   near_full_priority_off_soc_pct: 80
   allow_confirmed_flow_start_from_zero: true
   actual_power_stale_timeout_s: 300
+  run_started_ts: "{{ as_timestamp(now()) }}"
 
   [[generated.slot_bindings]]
 
@@ -87,7 +88,7 @@ variables:
   trigger_from_house_power_w: >-
     {% if triggered_by_house_power_sensor and trigger is defined and trigger.from_state is not none %}
       {% set value = trigger.from_state.state %}
-      {% if value not in ['unknown', 'unavailable', 'none', ''] %}
+      {% if is_number(value) %}
         {{ value | float(0) }}
       {% else %}
         none
@@ -98,7 +99,7 @@ variables:
   trigger_to_house_power_w: >-
     {% if triggered_by_house_power_sensor and trigger is defined and trigger.to_state is not none %}
       {% set value = trigger.to_state.state %}
-      {% if value not in ['unknown', 'unavailable', 'none', ''] %}
+      {% if is_number(value) %}
         {{ value | float(0) }}
       {% else %}
         none
@@ -123,8 +124,8 @@ variables:
       {{ house_power_trigger_delta_w | float(0) < minimum_trigger_delta_w | float(0) }}
     {% endif %}
   house_power_state: "{{ states(house_power_sensor) }}"
-  house_power_valid: "{{ house_power_state not in ['unknown', 'unavailable', 'none', ''] }}"
-  house_power_w: "{{ house_power_state | float(0) }}"
+  house_power_valid: "{{ is_number(house_power_state) }}"
+  house_power_w: "{{ house_power_state | float(0) if house_power_valid | bool else 0 }}"
 
   [[generated.slot_state_vars]]
 

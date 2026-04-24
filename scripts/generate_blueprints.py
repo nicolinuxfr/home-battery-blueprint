@@ -130,7 +130,7 @@ slot___SLOT___target_last_changed_ts: >-
   {% endif %}
 slot___SLOT___target_age_s: >-
   {% if slot___SLOT___target_last_changed_ts | float(0) > 0 %}
-    {{ [as_timestamp(now()) - (slot___SLOT___target_last_changed_ts | float(0)), 0] | max }}
+    {{ [run_started_ts | float(0) - (slot___SLOT___target_last_changed_ts | float(0)), 0] | max }}
   {% else %}
     0
   {% endif %}
@@ -165,7 +165,7 @@ slot___SLOT___actual_power_last_updated_ts: >-
   {% endif %}
 slot___SLOT___actual_power_age_s: >-
   {% if slot___SLOT___actual_power_last_updated_ts | float(0) > 0 %}
-    {{ [as_timestamp(now()) - (slot___SLOT___actual_power_last_updated_ts | float(0)), 0] | max }}
+    {{ [run_started_ts | float(0) - (slot___SLOT___actual_power_last_updated_ts | float(0)), 0] | max }}
   {% else %}
     999999
   {% endif %}
@@ -315,22 +315,18 @@ SLOT_BATTERIES_TEMPLATE = """
 
 
 SLOT_COOLDOWN_TEMPLATE = """
+slot___SLOT___cooldown_elapsed: >-
+  {% if battery___SLOT___cooldown_seconds | float(0) <= 0 %}
+    true
+  {% elif slot___SLOT___target_last_changed_ts | float(0) <= 0 %}
+    true
+  {% else %}
+    {{ run_started_ts | float(0) - (slot___SLOT___target_last_changed_ts | float(0)) >= battery___SLOT___cooldown_seconds | float(0) }}
+  {% endif %}
 discharge_cooldown_ok___SLOT__: >-
-  {% if not slot___SLOT___can_discharge %}
-    false
-  {% elif battery___SLOT___cooldown_seconds | float(0) <= 0 %}
-    true
-  {% else %}
-    {{ slot___SLOT___target_last_changed_ts == 0 or as_timestamp(now()) - slot___SLOT___target_last_changed_ts >= battery___SLOT___cooldown_seconds | float(0) }}
-  {% endif %}
+  {{ (slot___SLOT___can_discharge | bool) and (slot___SLOT___cooldown_elapsed | bool) }}
 charge_cooldown_ok___SLOT__: >-
-  {% if not slot___SLOT___can_charge %}
-    false
-  {% elif battery___SLOT___cooldown_seconds | float(0) <= 0 %}
-    true
-  {% else %}
-    {{ slot___SLOT___target_last_changed_ts == 0 or as_timestamp(now()) - slot___SLOT___target_last_changed_ts >= battery___SLOT___cooldown_seconds | float(0) }}
-  {% endif %}
+  {{ (slot___SLOT___can_charge | bool) and (slot___SLOT___cooldown_elapsed | bool) }}
 """.strip()
 
 
