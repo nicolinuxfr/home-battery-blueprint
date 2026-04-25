@@ -302,6 +302,12 @@ variables:
     {% else %}
       {{ [raw_export_w | float(0), release_deadband_w | float(0)] | min }}
     {% endif %}
+  cooldown_ready_discharge_export_trim_w: >-
+    {% if raw_export_w | float(0) < minimum_target_delta_w | float(0) %}
+      0
+    {% else %}
+      {{ [raw_export_w | float(0), release_deadband_w | float(0)] | min }}
+    {% endif %}
   responsive_discharge_target_cooldown_s: >-
     {% set ns = namespace(cooldowns=[]) %}
     {% for battery in batteries %}
@@ -361,7 +367,8 @@ variables:
       t2=0,
       t3=0,
       t4=0,
-      responsive_trim_remaining=0
+      responsive_trim_remaining=0,
+      cooldown_ready_trim_remaining=0
     ) %}
     {% if operating_mode in ['discharge', 'discharge_hold'] %}
       {% for battery in discharge_hold_order %}
@@ -470,6 +477,33 @@ variables:
             {% set ns.trimmed_locked_w = ns.trimmed_locked_w + trim_allocation %}
           {% endif %}
           {% set ns.responsive_trim_remaining = [ns.responsive_trim_remaining - trim_allocation, 0] | max %}
+        {% endif %}
+      {% endfor %}
+      {% set responsive_trim_applied = (responsive_discharge_export_trim_w | float(0)) - (ns.responsive_trim_remaining | float(0)) %}
+      {% set ns.cooldown_ready_trim_remaining = [(cooldown_ready_discharge_export_trim_w | float(0)) - responsive_trim_applied, 0] | max %}
+      {% for battery in discharge_trim_order %}
+        {% if ns.cooldown_ready_trim_remaining > 0 and not battery.discharge_locked %}
+          {% set current_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set current_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set current_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set current_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set current_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% set trim_allocation = [current_allocation, ns.cooldown_ready_trim_remaining] | min %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = (current_allocation - trim_allocation) | round(0) %}
+          {% endif %}
+          {% set ns.cooldown_ready_trim_remaining = [ns.cooldown_ready_trim_remaining - trim_allocation, 0] | max %}
         {% endif %}
       {% endfor %}
     {% endif %}
@@ -793,6 +827,7 @@ actions:
       current_total_charge_w: "{{ current_total_charge_w | float(0) | round(1) }}"
       discharge_export_guard_w: "{{ discharge_export_guard_w | float(0) | round(1) }}"
       responsive_discharge_export_trim_w: "{{ responsive_discharge_export_trim_w | float(0) | round(1) }}"
+      cooldown_ready_discharge_export_trim_w: "{{ cooldown_ready_discharge_export_trim_w | float(0) | round(1) }}"
       discharge_trimmed_locked_w: "{{ discharge_trimmed_locked_w | float(0) | round(1) }}"
       unresolved_raw_export_w: "{{ unresolved_raw_export_w | float(0) | round(1) }}"
       emergency_charge_surplus_w: "{{ emergency_charge_surplus_w | float(0) | round(1) }}"
