@@ -60,6 +60,7 @@ variables:
   minimum_trigger_delta_w: 10
   minimum_target_delta_w: 10
   emergency_charge_threshold_w: "{{ release_deadband_w }}"
+  high_soc_headroom_threshold_pct: 90
   allow_confirmed_flow_start_from_zero: true
   actual_power_stale_timeout_s: 300
   run_started_ts: "{{ as_timestamp(now()) }}"
@@ -227,29 +228,44 @@ variables:
     {% endfor %}
     {{ (ns.candidates | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true) }}
   discharge_residual_order: >-
-    {% set ns = namespace(candidates=[]) %}
+    {% set ns = namespace(headroom=[], regular=[]) %}
     {% for battery in batteries %}
       {% if battery.discharge_available %}
-        {% set ns.candidates = ns.candidates + [battery] %}
+        {% if battery.headroom_priority %}
+          {% set ns.headroom = ns.headroom + [battery] %}
+        {% else %}
+          {% set ns.regular = ns.regular + [battery] %}
+        {% endif %}
       {% endif %}
     {% endfor %}
-    {{ (ns.candidates | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s') }}
+    {{ (ns.headroom | sort(attribute='cooldown_s') | sort(attribute='soc', reverse=true))
+       + ((ns.regular | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s')) }}
   discharge_trim_order: >-
-    {% set ns = namespace(candidates=[]) %}
+    {% set ns = namespace(regular=[], headroom=[]) %}
     {% for battery in batteries %}
       {% if battery.can_discharge and battery.commanded_discharge | float(0) > 0 %}
-        {% set ns.candidates = ns.candidates + [battery] %}
+        {% if battery.headroom_priority %}
+          {% set ns.headroom = ns.headroom + [battery] %}
+        {% else %}
+          {% set ns.regular = ns.regular + [battery] %}
+        {% endif %}
       {% endif %}
     {% endfor %}
-    {{ (ns.candidates | sort(attribute='soc')) | sort(attribute='cooldown_s') }}
+    {{ ((ns.regular | sort(attribute='soc')) | sort(attribute='cooldown_s'))
+       + (ns.headroom | sort(attribute='cooldown_s') | sort(attribute='soc')) }}
   charge_order: >-
-    {% set ns = namespace(candidates=[]) %}
+    {% set ns = namespace(regular=[], headroom=[]) %}
     {% for battery in batteries %}
       {% if battery.can_charge %}
-        {% set ns.candidates = ns.candidates + [battery] %}
+        {% if battery.headroom_priority %}
+          {% set ns.headroom = ns.headroom + [battery] %}
+        {% else %}
+          {% set ns.regular = ns.regular + [battery] %}
+        {% endif %}
       {% endif %}
     {% endfor %}
-    {{ (ns.candidates | sort(attribute='soc')) | sort(attribute='cooldown_s') }}
+    {{ ((ns.regular | sort(attribute='soc')) | sort(attribute='cooldown_s'))
+       + (ns.headroom | sort(attribute='cooldown_s') | sort(attribute='soc')) }}
   emergency_charge_order: >-
     {% set ns = namespace(candidates=[]) %}
     {% for battery in batteries %}
@@ -543,6 +559,7 @@ variables:
       '1': {
         'used': slot_1_used | bool,
         'soc': slot_1_soc | float(0),
+        'headroom_priority': slot_1_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_1_cooldown_seconds | float(0),
         'current_target_w': slot_1_current_target_w | float(0),
         'signed_target_w': signed_target_1 | float(0),
@@ -569,6 +586,7 @@ variables:
       '2': {
         'used': slot_2_used | bool,
         'soc': slot_2_soc | float(0),
+        'headroom_priority': slot_2_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_2_cooldown_seconds | float(0),
         'current_target_w': slot_2_current_target_w | float(0),
         'signed_target_w': signed_target_2 | float(0),
@@ -595,6 +613,7 @@ variables:
       '3': {
         'used': slot_3_used | bool,
         'soc': slot_3_soc | float(0),
+        'headroom_priority': slot_3_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_3_cooldown_seconds | float(0),
         'current_target_w': slot_3_current_target_w | float(0),
         'signed_target_w': signed_target_3 | float(0),
@@ -621,6 +640,7 @@ variables:
       '4': {
         'used': slot_4_used | bool,
         'soc': slot_4_soc | float(0),
+        'headroom_priority': slot_4_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_4_cooldown_seconds | float(0),
         'current_target_w': slot_4_current_target_w | float(0),
         'signed_target_w': signed_target_4 | float(0),

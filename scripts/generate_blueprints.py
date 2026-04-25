@@ -266,6 +266,7 @@ SLOT_BATTERIES_TEMPLATE = """
   {% set ns.items = ns.items + [{
     'slot': __SLOT__,
     'soc': slot___SLOT___soc | float(0),
+    'headroom_priority': slot___SLOT___soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
     'cooldown_s': battery___SLOT___cooldown_seconds | float(0),
     'current_target': current_target,
     'max_discharge': battery___SLOT___max_discharge_w | float(0),
