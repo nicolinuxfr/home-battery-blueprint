@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.4.6
+
+- Finer adjustments to be closer to 0 W and bug fixes.
+
 ## 2026.4.5
 
 - Big simplification of the logic :
