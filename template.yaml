@@ -448,7 +448,7 @@ variables:
     {{ {
       'targets': {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4},
       'trimmed_locked_w': ns.trimmed_locked_w | round(0),
-      'unresolved_raw_export_w': (ns.trim_remaining + ns.responsive_trim_remaining) | round(0)
+      'unresolved_raw_export_w': ns.trim_remaining | round(0)
     } }}
   discharge_targets: "{{ discharge_plan['targets'] }}"
   unresolved_raw_export_w: "{{ discharge_plan['unresolved_raw_export_w'] | float(0) }}"
