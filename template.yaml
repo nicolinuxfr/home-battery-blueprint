@@ -302,6 +302,20 @@ variables:
     {% else %}
       {{ [raw_export_w | float(0), release_deadband_w | float(0)] | min }}
     {% endif %}
+  responsive_discharge_target_cooldown_s: >-
+    {% set ns = namespace(cooldowns=[]) %}
+    {% for battery in batteries %}
+      {% if battery.discharge_available
+            and battery.cooldown_s | float(0) > 0
+            and battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
+        {% set ns.cooldowns = ns.cooldowns + [battery.cooldown_s | float(0)] %}
+      {% endif %}
+    {% endfor %}
+    {% if ns.cooldowns | count > 0 %}
+      {{ ns.cooldowns | min }}
+    {% else %}
+      0
+    {% endif %}
   charge_order: >-
     {% set ns = namespace(regular=[], headroom=[]) %}
     {% for battery in batteries %}
@@ -323,6 +337,20 @@ variables:
       {% endif %}
     {% endfor %}
     {{ (ns.candidates | sort(attribute='soc')) | sort(attribute='cooldown_s') }}
+  responsive_charge_target_cooldown_s: >-
+    {% set ns = namespace(cooldowns=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_charge
+            and battery.cooldown_s | float(0) > 0
+            and battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
+        {% set ns.cooldowns = ns.cooldowns + [battery.cooldown_s | float(0)] %}
+      {% endif %}
+    {% endfor %}
+    {% if ns.cooldowns | count > 0 %}
+      {{ ns.cooldowns | min }}
+    {% else %}
+      0
+    {% endif %}
 
   discharge_plan: >-
     {% set ns = namespace(

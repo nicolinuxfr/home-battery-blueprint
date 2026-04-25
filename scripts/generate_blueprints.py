@@ -311,7 +311,16 @@ SLOT_COMMAND_TEMPLATE = """
 responsive_target_allowed___SLOT__: >-
   {{ battery___SLOT___cooldown_seconds | float(0) > 0
      and battery___SLOT___cooldown_seconds | float(0) <= responsive_trim_max_cooldown_s | float(0)
-     and battery___SLOT___cooldown_seconds | float(0) == responsive_discharge_trim_cooldown_s | float(0) }}
+     and (
+       (
+         slot___SLOT___can_discharge | bool
+         and battery___SLOT___cooldown_seconds | float(0) == responsive_discharge_target_cooldown_s | float(0)
+       )
+       or (
+         slot___SLOT___can_charge | bool
+         and battery___SLOT___cooldown_seconds | float(0) == responsive_charge_target_cooldown_s | float(0)
+       )
+     ) }}
 slot_command_deadband_w___SLOT__: >-
   {% if responsive_target_allowed___SLOT__ | bool %}
     {{ minimum_target_delta_w | float(0) }}
