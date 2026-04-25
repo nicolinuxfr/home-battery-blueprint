@@ -258,6 +258,8 @@ SLOT_VALIDATION_TEMPLATE = """
 SLOT_BATTERIES_TEMPLATE = """
 {% if slot___SLOT___used %}
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% set commanded_discharge = [current_target, 0] | max %}
+  {% set commanded_discharge = [commanded_discharge, battery___SLOT___max_discharge_w | float(0)] | min %}
   {% set reserved_balance_power = slot___SLOT___reserved_balance_power | float(0) %}
   {% set reserved_discharge = [reserved_balance_power, 0] | max %}
   {% set reserved_charge = [0 - reserved_balance_power, 0] | max %}
@@ -265,11 +267,13 @@ SLOT_BATTERIES_TEMPLATE = """
     'slot': __SLOT__,
     'soc': slot___SLOT___soc | float(0),
     'cooldown_s': battery___SLOT___cooldown_seconds | float(0),
+    'current_target': current_target,
     'max_discharge': battery___SLOT___max_discharge_w | float(0),
     'max_charge': battery___SLOT___max_charge_w | float(0),
     'can_discharge': slot___SLOT___can_discharge | bool,
     'discharge_available': (slot___SLOT___can_discharge | bool) and not (slot___SLOT___discharge_delivery_stalled | bool),
     'can_charge': slot___SLOT___can_charge | bool,
+    'commanded_discharge': commanded_discharge,
     'current_discharge': reserved_discharge,
     'current_charge': reserved_charge,
     'actual_power_fresh': slot___SLOT___actual_power_fresh | bool,

@@ -219,7 +219,7 @@ variables:
   discharge_hold_order: >-
     {% set ns = namespace(candidates=[]) %}
     {% for battery in batteries %}
-      {% if battery.discharge_available and battery.current_discharge | float(0) > 0 %}
+      {% if battery.can_discharge and battery.commanded_discharge | float(0) > 0 %}
         {% set ns.candidates = ns.candidates + [battery] %}
       {% endif %}
     {% endfor %}
@@ -235,7 +235,7 @@ variables:
   discharge_trim_order: >-
     {% set ns = namespace(candidates=[]) %}
     {% for battery in batteries %}
-      {% if battery.discharge_available %}
+      {% if battery.can_discharge and battery.commanded_discharge | float(0) > 0 %}
         {% set ns.candidates = ns.candidates + [battery] %}
       {% endif %}
     {% endfor %}
@@ -260,7 +260,6 @@ variables:
   discharge_plan: >-
     {% set ns = namespace(
       remaining=import_need_w | float(0),
-      total=0,
       trim_remaining=0,
       trimmed_locked_w=0,
       t1=0,
@@ -270,8 +269,9 @@ variables:
     ) %}
     {% if operating_mode in ['discharge', 'discharge_hold'] %}
       {% for battery in discharge_hold_order %}
-        {% set allocation = [battery.current_discharge, battery.max_discharge, ns.remaining] | min %}
+        {% set allocation = [battery.commanded_discharge, battery.max_discharge] | min %}
         {% set allocation = [allocation, 0] | max %}
+        {% set effective_allocation = [battery.current_discharge, allocation] | min %}
         {% if battery.slot == 1 %}
           {% set ns.t1 = allocation | round(0) %}
         {% elif battery.slot == 2 %}
@@ -281,8 +281,7 @@ variables:
         {% elif battery.slot == 4 %}
           {% set ns.t4 = allocation | round(0) %}
         {% endif %}
-        {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
-        {% set ns.total = ns.total + allocation %}
+        {% set ns.remaining = [ns.remaining - effective_allocation, 0] | max %}
       {% endfor %}
       {% if operating_mode == 'discharge' %}
         {% for battery in discharge_residual_order %}
@@ -309,11 +308,10 @@ variables:
               {% set ns.t4 = (current_allocation + allocation) | round(0) %}
             {% endif %}
             {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
-            {% set ns.total = ns.total + allocation %}
           {% endif %}
         {% endfor %}
       {% endif %}
-      {% set ns.trim_remaining = [ns.total - (import_need_w | float(0)), discharge_export_guard_w | float(0), 0] | max %}
+      {% set ns.trim_remaining = discharge_export_guard_w | float(0) %}
       {% for battery in discharge_trim_order %}
         {% if ns.trim_remaining > 0 %}
           {% set current_allocation = 0 %}
@@ -444,7 +442,7 @@ variables:
     {% set ns = namespace(t1=0, t2=0, t3=0, t4=0) %}
     {% if operating_mode == 'neutral' %}
       {% for battery in batteries %}
-        {% set hold_power = battery.current_discharge | float(0) - battery.current_charge | float(0) %}
+        {% set hold_power = battery.current_target | float(0) %}
         {% set hold_power = [hold_power, battery.max_discharge | float(0)] | min %}
         {% set hold_power = [hold_power, 0 - (battery.max_charge | float(0))] | max %}
         {% if battery.slot == 1 %}
