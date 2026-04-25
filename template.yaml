@@ -125,8 +125,10 @@ variables:
   house_power_valid: "{{ is_number(house_power_state) }}"
   house_power_w: "{{ house_power_state | float(0) if house_power_valid | bool else 0 }}"
 
-  # Generated slot state also removes any battery with configured stale
-  # actual-power telemetry from discharge allocation until telemetry recovers.
+  # Generated slot state treats actual-power telemetry as a guardrail: stale
+  # telemetry does not block an idle battery from starting, but an active
+  # battery that still reports stale or missing delivery after its response
+  # window is kept out of extra discharge allocation.
   [[generated.slot_state_vars]]
 
   # Rebuild the underlying house demand from the net house meter plus the
