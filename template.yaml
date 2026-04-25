@@ -223,7 +223,25 @@ variables:
     {% set ns = namespace(candidates=[]) %}
     {% for battery in batteries %}
       {% if battery.can_discharge and battery.commanded_discharge | float(0) > 0 %}
-        {% set ns.candidates = ns.candidates + [battery] %}
+        {% set hold = namespace(better_same_cooldown_waiting=false) %}
+        {% for other in batteries %}
+          {% if other.slot != battery.slot
+                and other.discharge_available
+                and other.commanded_discharge | float(0) <= 0
+                and other.cooldown_s | float(0) == battery.cooldown_s | float(0)
+                and (
+                  (other.headroom_priority and not battery.headroom_priority)
+                  or (
+                    other.headroom_priority == battery.headroom_priority
+                    and other.soc | float(0) > battery.soc | float(0)
+                  )
+                ) %}
+            {% set hold.better_same_cooldown_waiting = true %}
+          {% endif %}
+        {% endfor %}
+        {% if not hold.better_same_cooldown_waiting %}
+          {% set ns.candidates = ns.candidates + [battery] %}
+        {% endif %}
       {% endif %}
     {% endfor %}
     {{ (ns.candidates | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true) }}
