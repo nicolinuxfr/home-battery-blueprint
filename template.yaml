@@ -328,16 +328,11 @@ variables:
     {% set ns = namespace(
       remaining=import_need_w | float(0),
       trim_remaining=0,
-      unresolved_export_remaining=0,
       trimmed_locked_w=0,
       t1=0,
       t2=0,
       t3=0,
       t4=0,
-      immediate_trim_capacity_1=(slot_1_actual_discharge_w | float(0)) if (slot_1_actual_power_usable | bool) else (slot_1_current_discharge_w | float(0)),
-      immediate_trim_capacity_2=(slot_2_actual_discharge_w | float(0)) if (slot_2_actual_power_usable | bool) else (slot_2_current_discharge_w | float(0)),
-      immediate_trim_capacity_3=(slot_3_actual_discharge_w | float(0)) if (slot_3_actual_power_usable | bool) else (slot_3_current_discharge_w | float(0)),
-      immediate_trim_capacity_4=(slot_4_actual_discharge_w | float(0)) if (slot_4_actual_power_usable | bool) else (slot_4_current_discharge_w | float(0)),
       responsive_trim_remaining=0
     ) %}
     {% if operating_mode in ['discharge', 'discharge_hold'] %}
@@ -385,23 +380,17 @@ variables:
         {% endfor %}
       {% endif %}
       {% set ns.trim_remaining = discharge_export_guard_w | float(0) %}
-      {% set ns.unresolved_export_remaining = discharge_export_guard_w | float(0) %}
       {% for battery in discharge_trim_order %}
         {% if ns.trim_remaining > 0 %}
           {% set current_allocation = 0 %}
-          {% set immediate_trim_capacity = 0 %}
           {% if battery.slot == 1 %}
             {% set current_allocation = ns.t1 | float(0) %}
-            {% set immediate_trim_capacity = ns.immediate_trim_capacity_1 | float(0) %}
           {% elif battery.slot == 2 %}
             {% set current_allocation = ns.t2 | float(0) %}
-            {% set immediate_trim_capacity = ns.immediate_trim_capacity_2 | float(0) %}
           {% elif battery.slot == 3 %}
             {% set current_allocation = ns.t3 | float(0) %}
-            {% set immediate_trim_capacity = ns.immediate_trim_capacity_3 | float(0) %}
           {% elif battery.slot == 4 %}
             {% set current_allocation = ns.t4 | float(0) %}
-            {% set immediate_trim_capacity = ns.immediate_trim_capacity_4 | float(0) %}
           {% endif %}
           {% if current_allocation > 0
                 and battery.actual_power_fresh
@@ -409,76 +398,50 @@ variables:
                 and battery.actual_discharge | float(0) > current_allocation + command_deadband_w | float(0) %}
             {% set pending_actual_drop = [battery.actual_discharge | float(0) - current_allocation, ns.trim_remaining] | min %}
             {% set ns.trim_remaining = [ns.trim_remaining - pending_actual_drop, 0] | max %}
-            {% set ns.unresolved_export_remaining = [ns.unresolved_export_remaining - pending_actual_drop, 0] | max %}
           {% endif %}
           {% set trim_allocation = [current_allocation, ns.trim_remaining] | min %}
-          {% if battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
-            {% set immediate_trim_credit = [trim_allocation, immediate_trim_capacity] | min %}
-          {% else %}
-            {% set immediate_trim_credit = 0 %}
-          {% endif %}
           {% if battery.slot == 1 %}
             {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
-            {% set ns.immediate_trim_capacity_1 = [ns.immediate_trim_capacity_1 | float(0) - immediate_trim_credit, 0] | max %}
           {% elif battery.slot == 2 %}
             {% set ns.t2 = (current_allocation - trim_allocation) | round(0) %}
-            {% set ns.immediate_trim_capacity_2 = [ns.immediate_trim_capacity_2 | float(0) - immediate_trim_credit, 0] | max %}
           {% elif battery.slot == 3 %}
             {% set ns.t3 = (current_allocation - trim_allocation) | round(0) %}
-            {% set ns.immediate_trim_capacity_3 = [ns.immediate_trim_capacity_3 | float(0) - immediate_trim_credit, 0] | max %}
           {% elif battery.slot == 4 %}
             {% set ns.t4 = (current_allocation - trim_allocation) | round(0) %}
-            {% set ns.immediate_trim_capacity_4 = [ns.immediate_trim_capacity_4 | float(0) - immediate_trim_credit, 0] | max %}
           {% endif %}
           {% if battery.discharge_locked and trim_allocation > 0 %}
             {% set ns.trimmed_locked_w = ns.trimmed_locked_w + trim_allocation %}
           {% endif %}
           {% set ns.trim_remaining = [ns.trim_remaining - trim_allocation, 0] | max %}
-          {% set ns.unresolved_export_remaining = [ns.unresolved_export_remaining - immediate_trim_credit, 0] | max %}
         {% endif %}
       {% endfor %}
-      {% set ns.responsive_trim_remaining = ns.unresolved_export_remaining | float(0) + responsive_discharge_export_trim_w | float(0) %}
-      {% set ns.trim_remaining = 0 %}
+      {% set ns.responsive_trim_remaining = responsive_discharge_export_trim_w | float(0) %}
       {% for battery in responsive_discharge_trim_order %}
         {% if ns.responsive_trim_remaining > 0 %}
           {% set current_allocation = 0 %}
-          {% set immediate_trim_capacity = 0 %}
           {% if battery.slot == 1 %}
             {% set current_allocation = ns.t1 | float(0) %}
-            {% set immediate_trim_capacity = ns.immediate_trim_capacity_1 | float(0) %}
           {% elif battery.slot == 2 %}
             {% set current_allocation = ns.t2 | float(0) %}
-            {% set immediate_trim_capacity = ns.immediate_trim_capacity_2 | float(0) %}
           {% elif battery.slot == 3 %}
             {% set current_allocation = ns.t3 | float(0) %}
-            {% set immediate_trim_capacity = ns.immediate_trim_capacity_3 | float(0) %}
           {% elif battery.slot == 4 %}
             {% set current_allocation = ns.t4 | float(0) %}
-            {% set immediate_trim_capacity = ns.immediate_trim_capacity_4 | float(0) %}
           {% endif %}
-          {% if battery.can_charge and ns.responsive_trim_remaining | float(0) >= command_deadband_w | float(0) %}
-            {% set trim_allocation = current_allocation %}
-          {% else %}
-            {% set trim_allocation = [current_allocation, ns.responsive_trim_remaining] | min %}
-          {% endif %}
-          {% set immediate_trim_credit = [trim_allocation, immediate_trim_capacity] | min %}
+          {% set trim_allocation = [current_allocation, ns.responsive_trim_remaining] | min %}
           {% if battery.slot == 1 %}
             {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
-            {% set ns.immediate_trim_capacity_1 = [ns.immediate_trim_capacity_1 | float(0) - immediate_trim_credit, 0] | max %}
           {% elif battery.slot == 2 %}
             {% set ns.t2 = (current_allocation - trim_allocation) | round(0) %}
-            {% set ns.immediate_trim_capacity_2 = [ns.immediate_trim_capacity_2 | float(0) - immediate_trim_credit, 0] | max %}
           {% elif battery.slot == 3 %}
             {% set ns.t3 = (current_allocation - trim_allocation) | round(0) %}
-            {% set ns.immediate_trim_capacity_3 = [ns.immediate_trim_capacity_3 | float(0) - immediate_trim_credit, 0] | max %}
           {% elif battery.slot == 4 %}
             {% set ns.t4 = (current_allocation - trim_allocation) | round(0) %}
-            {% set ns.immediate_trim_capacity_4 = [ns.immediate_trim_capacity_4 | float(0) - immediate_trim_credit, 0] | max %}
           {% endif %}
           {% if battery.discharge_locked and trim_allocation > 0 %}
             {% set ns.trimmed_locked_w = ns.trimmed_locked_w + trim_allocation %}
           {% endif %}
-          {% set ns.responsive_trim_remaining = [ns.responsive_trim_remaining - immediate_trim_credit, 0] | max %}
+          {% set ns.responsive_trim_remaining = [ns.responsive_trim_remaining - trim_allocation, 0] | max %}
         {% endif %}
       {% endfor %}
     {% endif %}
