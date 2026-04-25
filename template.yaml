@@ -59,7 +59,6 @@ variables:
   release_deadband_w: 80
   minimum_trigger_delta_w: 10
   minimum_target_delta_w: 10
-  emergency_charge_threshold_w: "{{ release_deadband_w }}"
   high_soc_headroom_threshold_pct: 90
   responsive_trim_max_cooldown_s: 10
   allow_confirmed_flow_start_from_zero: true
@@ -357,12 +356,20 @@ variables:
     {% else %}
       0
     {% endif %}
+  opportunistic_charge_threshold_w: >-
+    {% if responsive_charge_target_cooldown_s | float(0) > 0
+          and responsive_charge_target_cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
+      {{ minimum_target_delta_w | float(0) }}
+    {% else %}
+      {{ command_deadband_w | float(0) }}
+    {% endif %}
 
   discharge_plan: >-
     {% set ns = namespace(
       remaining=import_need_w | float(0),
       trim_remaining=0,
       trimmed_locked_w=0,
+      chargeable_raw_export_w=raw_export_w | float(0),
       t1=0,
       t2=0,
       t3=0,
@@ -433,6 +440,7 @@ variables:
                 and battery.actual_discharge | float(0) > current_allocation + command_deadband_w | float(0) %}
             {% set pending_actual_drop = [battery.actual_discharge | float(0) - current_allocation, ns.trim_remaining] | min %}
             {% set ns.trim_remaining = [ns.trim_remaining - pending_actual_drop, 0] | max %}
+            {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - pending_actual_drop, 0] | max %}
           {% endif %}
           {% set trim_allocation = [current_allocation, ns.trim_remaining] | min %}
           {% if battery.slot == 1 %}
@@ -446,6 +454,9 @@ variables:
           {% endif %}
           {% if battery.discharge_locked and trim_allocation > 0 %}
             {% set ns.trimmed_locked_w = ns.trimmed_locked_w + trim_allocation %}
+          {% endif %}
+          {% if trim_allocation > 0 %}
+            {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - trim_allocation, 0] | max %}
           {% endif %}
           {% set ns.trim_remaining = [ns.trim_remaining - trim_allocation, 0] | max %}
         {% endif %}
@@ -476,6 +487,9 @@ variables:
           {% if battery.discharge_locked and trim_allocation > 0 %}
             {% set ns.trimmed_locked_w = ns.trimmed_locked_w + trim_allocation %}
           {% endif %}
+          {% if trim_allocation > 0 and not battery.discharge_locked %}
+            {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - trim_allocation, 0] | max %}
+          {% endif %}
           {% set ns.responsive_trim_remaining = [ns.responsive_trim_remaining - trim_allocation, 0] | max %}
         {% endif %}
       {% endfor %}
@@ -503,6 +517,9 @@ variables:
           {% elif battery.slot == 4 %}
             {% set ns.t4 = (current_allocation - trim_allocation) | round(0) %}
           {% endif %}
+          {% if trim_allocation > 0 %}
+            {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - trim_allocation, 0] | max %}
+          {% endif %}
           {% set ns.cooldown_ready_trim_remaining = [ns.cooldown_ready_trim_remaining - trim_allocation, 0] | max %}
         {% endif %}
       {% endfor %}
@@ -510,19 +527,21 @@ variables:
     {{ {
       'targets': {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4},
       'trimmed_locked_w': ns.trimmed_locked_w | round(0),
-      'unresolved_raw_export_w': ns.trim_remaining | round(0)
+      'unresolved_raw_export_w': ns.trim_remaining | round(0),
+      'chargeable_raw_export_w': ns.chargeable_raw_export_w | round(0)
     } }}
   discharge_targets: "{{ discharge_plan['targets'] }}"
   unresolved_raw_export_w: "{{ discharge_plan['unresolved_raw_export_w'] | float(0) }}"
+  chargeable_raw_export_w: "{{ discharge_plan['chargeable_raw_export_w'] | float(0) }}"
   emergency_charge_surplus_w: >-
     {% if operating_mode in ['discharge', 'discharge_hold', 'charge']
           and charge_capable_count | int(0) > 0
-          and unresolved_raw_export_w | float(0) >= emergency_charge_threshold_w | float(0) %}
-      {{ unresolved_raw_export_w | float(0) }}
+          and chargeable_raw_export_w | float(0) >= opportunistic_charge_threshold_w | float(0) %}
+      {{ chargeable_raw_export_w | float(0) }}
     {% else %}
       0
     {% endif %}
-  emergency_charge_active: "{{ emergency_charge_surplus_w | float(0) >= command_deadband_w | float(0) }}"
+  emergency_charge_active: "{{ emergency_charge_surplus_w | float(0) >= opportunistic_charge_threshold_w | float(0) }}"
   charge_targets: >-
     {% set batteries = emergency_charge_order if emergency_charge_active | bool else charge_order %}
     {% set charge_need = emergency_charge_surplus_w | float(0) if emergency_charge_active | bool else export_surplus_w | float(0) %}
@@ -702,6 +721,8 @@ variables:
         'soc': slot_1_soc | float(0),
         'headroom_priority': slot_1_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_1_cooldown_seconds | float(0),
+        'max_discharge_w': battery_1_max_discharge_w | float(0),
+        'max_charge_w': battery_1_max_charge_w | float(0),
         'current_target_w': slot_1_current_target_w | float(0),
         'signed_target_w': signed_target_1 | float(0),
         'discharge_target_w': discharge_target_1 | float(0),
@@ -716,6 +737,7 @@ variables:
         'target_age_s': slot_1_target_age_s | float(0),
         'response_grace_s': slot_1_response_grace_s | float(0),
         'discharge_delivery_stalled': slot_1_discharge_delivery_stalled | bool,
+        'can_charge': slot_1_can_charge | bool,
         'discharge_available': (slot_1_can_discharge | bool) and not (slot_1_discharge_delivery_stalled | bool),
         'discharge_locked': (not (discharge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) > 0 and not (slot_1_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) < 0,
@@ -729,6 +751,8 @@ variables:
         'soc': slot_2_soc | float(0),
         'headroom_priority': slot_2_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_2_cooldown_seconds | float(0),
+        'max_discharge_w': battery_2_max_discharge_w | float(0),
+        'max_charge_w': battery_2_max_charge_w | float(0),
         'current_target_w': slot_2_current_target_w | float(0),
         'signed_target_w': signed_target_2 | float(0),
         'discharge_target_w': discharge_target_2 | float(0),
@@ -743,6 +767,7 @@ variables:
         'target_age_s': slot_2_target_age_s | float(0),
         'response_grace_s': slot_2_response_grace_s | float(0),
         'discharge_delivery_stalled': slot_2_discharge_delivery_stalled | bool,
+        'can_charge': slot_2_can_charge | bool,
         'discharge_available': (slot_2_can_discharge | bool) and not (slot_2_discharge_delivery_stalled | bool),
         'discharge_locked': (not (discharge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) > 0 and not (slot_2_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) < 0,
@@ -756,6 +781,8 @@ variables:
         'soc': slot_3_soc | float(0),
         'headroom_priority': slot_3_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_3_cooldown_seconds | float(0),
+        'max_discharge_w': battery_3_max_discharge_w | float(0),
+        'max_charge_w': battery_3_max_charge_w | float(0),
         'current_target_w': slot_3_current_target_w | float(0),
         'signed_target_w': signed_target_3 | float(0),
         'discharge_target_w': discharge_target_3 | float(0),
@@ -770,6 +797,7 @@ variables:
         'target_age_s': slot_3_target_age_s | float(0),
         'response_grace_s': slot_3_response_grace_s | float(0),
         'discharge_delivery_stalled': slot_3_discharge_delivery_stalled | bool,
+        'can_charge': slot_3_can_charge | bool,
         'discharge_available': (slot_3_can_discharge | bool) and not (slot_3_discharge_delivery_stalled | bool),
         'discharge_locked': (not (discharge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) > 0 and not (slot_3_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) < 0,
@@ -783,6 +811,8 @@ variables:
         'soc': slot_4_soc | float(0),
         'headroom_priority': slot_4_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_4_cooldown_seconds | float(0),
+        'max_discharge_w': battery_4_max_discharge_w | float(0),
+        'max_charge_w': battery_4_max_charge_w | float(0),
         'current_target_w': slot_4_current_target_w | float(0),
         'signed_target_w': signed_target_4 | float(0),
         'discharge_target_w': discharge_target_4 | float(0),
@@ -797,6 +827,7 @@ variables:
         'target_age_s': slot_4_target_age_s | float(0),
         'response_grace_s': slot_4_response_grace_s | float(0),
         'discharge_delivery_stalled': slot_4_discharge_delivery_stalled | bool,
+        'can_charge': slot_4_can_charge | bool,
         'discharge_available': (slot_4_can_discharge | bool) and not (slot_4_discharge_delivery_stalled | bool),
         'discharge_locked': (not (discharge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) > 0 and not (slot_4_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) < 0,
@@ -830,7 +861,9 @@ actions:
       cooldown_ready_discharge_export_trim_w: "{{ cooldown_ready_discharge_export_trim_w | float(0) | round(1) }}"
       discharge_trimmed_locked_w: "{{ discharge_trimmed_locked_w | float(0) | round(1) }}"
       unresolved_raw_export_w: "{{ unresolved_raw_export_w | float(0) | round(1) }}"
+      chargeable_raw_export_w: "{{ chargeable_raw_export_w | float(0) | round(1) }}"
       emergency_charge_surplus_w: "{{ emergency_charge_surplus_w | float(0) | round(1) }}"
+      opportunistic_charge_threshold_w: "{{ opportunistic_charge_threshold_w | float(0) | round(1) }}"
       validation_errors: "{{ validation_errors | tojson }}"
       discharge_targets: "{{ discharge_targets | tojson }}"
       charge_targets: "{{ charge_targets | tojson }}"
