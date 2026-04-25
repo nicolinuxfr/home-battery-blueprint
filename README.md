@@ -72,6 +72,7 @@ Zendure example:
 
 - The blueprint does not create a moving-average helper. If you want a smoothed house signal, provide an already filtered sensor as input.
 - If a battery should charge, the chosen target entity must accept negative values. Otherwise, use an intermediate signed helper.
+- The shortest-cooldown responsive battery can receive small non-zero targets down to the internal `10 W` target delta so it can erase the remaining residual instead of waiting for the global `60 W` command deadband. When the target entity exposes a positive minimum above that small target, the blueprint clamps the written value to that entity minimum.
 - Optional actions do not run in neutral. If your integration needs an explicit translation of `0`, use a signed helper that the integration or another automation consumes.
 - The blueprint metadata and documentation point to `nicolinuxfr/home-battery-blueprint`.
 

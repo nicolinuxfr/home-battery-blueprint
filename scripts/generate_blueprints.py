@@ -308,9 +308,19 @@ charge_cooldown_ok___SLOT__: >-
 
 
 SLOT_COMMAND_TEMPLATE = """
-discharge_active___SLOT__: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target___SLOT__ >= command_deadband_w }}"
-charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold'] or emergency_charge_active | bool) and charge_target___SLOT__ >= command_deadband_w }}"
-neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target___SLOT__ | abs >= command_deadband_w }}"
+responsive_target_allowed___SLOT__: >-
+  {{ battery___SLOT___cooldown_seconds | float(0) > 0
+     and battery___SLOT___cooldown_seconds | float(0) <= responsive_trim_max_cooldown_s | float(0)
+     and battery___SLOT___cooldown_seconds | float(0) == responsive_discharge_trim_cooldown_s | float(0) }}
+slot_command_deadband_w___SLOT__: >-
+  {% if responsive_target_allowed___SLOT__ | bool %}
+    {{ minimum_target_delta_w | float(0) }}
+  {% else %}
+    {{ command_deadband_w | float(0) }}
+  {% endif %}
+discharge_active___SLOT__: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target___SLOT__ >= slot_command_deadband_w___SLOT__ | float(0) }}"
+charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold'] or emergency_charge_active | bool) and charge_target___SLOT__ >= slot_command_deadband_w___SLOT__ | float(0) }}"
+neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target___SLOT__ | abs >= slot_command_deadband_w___SLOT__ | float(0) }}"
 signed_target___SLOT__: >-
   {% if discharge_active___SLOT__ %}
     {{ discharge_target___SLOT__ | float(0) }}
@@ -393,6 +403,7 @@ should_run_discharge_actions___SLOT__: >-
     false
   {% elif slot___SLOT___current_target_sign | int(0) != 1 %}
     {{ start_from_zero_flow_confirmed___SLOT__ | bool
+       or (responsive_target_allowed___SLOT__ | bool and signed_target___SLOT__ | float(0) > 0)
        or slot___SLOT___current_target_sign | int(0) != 0 }}
   {% elif not (target_value_changed___SLOT__ | bool) %}
     false
@@ -409,6 +420,7 @@ should_run_charge_actions___SLOT__: >-
     false
   {% elif slot___SLOT___current_target_sign | int(0) != -1 %}
     {{ start_from_zero_flow_confirmed___SLOT__ | bool
+       or (responsive_target_allowed___SLOT__ | bool and signed_target___SLOT__ | float(0) < 0)
        or slot___SLOT___current_target_sign | int(0) != 0 }}
   {% elif not (target_value_changed___SLOT__ | bool) %}
     false
@@ -446,6 +458,7 @@ SLOT_ACTION_TEMPLATE = """
             target_power_w: "{{ signed_target___SLOT__ }}"
             target_discharge_w: "{{ discharge_target___SLOT__ }}"
             target_charge_w: "{{ charge_target___SLOT__ }}"
+            target_power_value: "{{ target_power_w | round(0) | int(0) }}"
         - alias: "[[slot.__SLOT__]]: [[trace.select_target_service_suffix]]"
           choose:
             - conditions:
@@ -458,7 +471,16 @@ SLOT_ACTION_TEMPLATE = """
                   target:
                     entity_id: "{{ battery___SLOT___target_power_entity }}"
                   data:
-                    value: "{{ target_power_w | round(0) | int(0) }}"
+                    value: >-
+                      {% set entity_min = state_attr(battery___SLOT___target_power_entity, 'min') %}
+                      {% if target_power_value | int(0) > 0
+                            and entity_min is number
+                            and entity_min | float(0) > 0
+                            and target_power_value | int(0) < entity_min | float(0) %}
+                        {{ entity_min | float(0) | round(0) | int(0) }}
+                      {% else %}
+                        {{ target_power_value | int(0) }}
+                      {% endif %}
             - conditions:
                 - condition: template
                   value_template: "{{ battery___SLOT___target_power_entity.startswith('input_number.') }}"
@@ -469,7 +491,16 @@ SLOT_ACTION_TEMPLATE = """
                   target:
                     entity_id: "{{ battery___SLOT___target_power_entity }}"
                   data:
-                    value: "{{ target_power_w | round(0) | int(0) }}"
+                    value: >-
+                      {% set entity_min = state_attr(battery___SLOT___target_power_entity, 'min') %}
+                      {% if target_power_value | int(0) > 0
+                            and entity_min is number
+                            and entity_min | float(0) > 0
+                            and target_power_value | int(0) < entity_min | float(0) %}
+                        {{ entity_min | float(0) | round(0) | int(0) }}
+                      {% else %}
+                        {{ target_power_value | int(0) }}
+                      {% endif %}
 - alias: "[[slot.__SLOT__]]: [[trace.run_discharge_actions_suffix]]"
   choose:
     - alias: "[[slot.__SLOT__]]: [[trace.discharge_actions_branch_suffix]]"

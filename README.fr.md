@@ -72,6 +72,7 @@ Exemple Zendure :
 
 - Le blueprint ne crée pas lui-même de capteur de moyenne glissante. Si tu veux un signal lissé, fournis en entrée un capteur déjà filtré.
 - Si une batterie doit charger, l'entité de consigne choisie doit accepter les valeurs négatives. Sinon, utilise un helper signé intermédiaire.
+- La batterie réactive au cooldown le plus court peut recevoir de petites consignes non nulles jusqu'à la bande interne de `10 W` afin d'effacer le résiduel restant au lieu d'attendre la bande morte globale de `60 W`. Si l'entité de consigne expose un minimum positif supérieur à cette petite consigne, le blueprint borne la valeur écrite à ce minimum.
 - Les actions optionnelles ne tournent pas en neutre. Si ton intégration a besoin d'une traduction explicite du `0`, passe par un helper signé que l'intégration ou une autre automatisation consomme.
 - Les métadonnées du blueprint et la documentation pointent vers `nicolinuxfr/home-battery-blueprint`.
 
