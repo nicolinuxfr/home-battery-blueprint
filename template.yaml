@@ -370,12 +370,14 @@ variables:
       trim_remaining=0,
       trimmed_locked_w=0,
       chargeable_raw_export_w=raw_export_w | float(0),
+      export_latency_brake_w=0,
       t1=0,
       t2=0,
       t3=0,
       t4=0,
       responsive_trim_remaining=0,
-      cooldown_ready_trim_remaining=0
+      cooldown_ready_trim_remaining=0,
+      export_latency_brake_remaining=0
     ) %}
     {% if operating_mode in ['discharge', 'discharge_hold'] %}
       {% for battery in discharge_hold_order %}
@@ -455,7 +457,7 @@ variables:
           {% if battery.discharge_locked and trim_allocation > 0 %}
             {% set ns.trimmed_locked_w = ns.trimmed_locked_w + trim_allocation %}
           {% endif %}
-          {% if trim_allocation > 0 %}
+          {% if trim_allocation > 0 and not battery.discharge_locked %}
             {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - trim_allocation, 0] | max %}
           {% endif %}
           {% set ns.trim_remaining = [ns.trim_remaining - trim_allocation, 0] | max %}
@@ -523,16 +525,50 @@ variables:
           {% set ns.cooldown_ready_trim_remaining = [ns.cooldown_ready_trim_remaining - trim_allocation, 0] | max %}
         {% endif %}
       {% endfor %}
+      {% set ns.export_latency_brake_remaining = [raw_export_w | float(0) - release_deadband_w | float(0), 0] | max %}
+      {% for battery in responsive_discharge_trim_order %}
+        {% if ns.export_latency_brake_remaining > 0
+              and battery.can_charge
+              and battery.actual_power_fresh %}
+          {% set current_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set current_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set current_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set current_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set current_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% if current_allocation > 0
+                and battery.actual_discharge | float(0) > current_allocation + release_deadband_w | float(0) %}
+            {% set brake_allocation = [current_allocation, ns.export_latency_brake_remaining] | min %}
+            {% if battery.slot == 1 %}
+              {% set ns.t1 = (current_allocation - brake_allocation) | round(0) %}
+            {% elif battery.slot == 2 %}
+              {% set ns.t2 = (current_allocation - brake_allocation) | round(0) %}
+            {% elif battery.slot == 3 %}
+              {% set ns.t3 = (current_allocation - brake_allocation) | round(0) %}
+            {% elif battery.slot == 4 %}
+              {% set ns.t4 = (current_allocation - brake_allocation) | round(0) %}
+            {% endif %}
+            {% set ns.export_latency_brake_w = ns.export_latency_brake_w + brake_allocation %}
+            {% set ns.export_latency_brake_remaining = [ns.export_latency_brake_remaining - brake_allocation, 0] | max %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
     {% endif %}
     {{ {
       'targets': {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4},
       'trimmed_locked_w': ns.trimmed_locked_w | round(0),
       'unresolved_raw_export_w': ns.trim_remaining | round(0),
-      'chargeable_raw_export_w': ns.chargeable_raw_export_w | round(0)
+      'chargeable_raw_export_w': ns.chargeable_raw_export_w | round(0),
+      'export_latency_brake_w': ns.export_latency_brake_w | round(0)
     } }}
   discharge_targets: "{{ discharge_plan['targets'] }}"
   unresolved_raw_export_w: "{{ discharge_plan['unresolved_raw_export_w'] | float(0) }}"
   chargeable_raw_export_w: "{{ discharge_plan['chargeable_raw_export_w'] | float(0) }}"
+  export_latency_brake_w: "{{ discharge_plan['export_latency_brake_w'] | float(0) }}"
   emergency_charge_surplus_w: >-
     {% if operating_mode in ['discharge', 'discharge_hold', 'charge']
           and charge_capable_count | int(0) > 0
@@ -862,6 +898,7 @@ actions:
       discharge_trimmed_locked_w: "{{ discharge_trimmed_locked_w | float(0) | round(1) }}"
       unresolved_raw_export_w: "{{ unresolved_raw_export_w | float(0) | round(1) }}"
       chargeable_raw_export_w: "{{ chargeable_raw_export_w | float(0) | round(1) }}"
+      export_latency_brake_w: "{{ export_latency_brake_w | float(0) | round(1) }}"
       emergency_charge_surplus_w: "{{ emergency_charge_surplus_w | float(0) | round(1) }}"
       opportunistic_charge_threshold_w: "{{ opportunistic_charge_threshold_w | float(0) | round(1) }}"
       validation_errors: "{{ validation_errors | tojson }}"
