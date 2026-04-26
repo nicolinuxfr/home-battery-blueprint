@@ -417,6 +417,17 @@ variables:
       {% endif %}
     {% endfor %}
     {{ ns.candidates }}
+  responsive_charge_absorber_available: >-
+    {% set ns = namespace(available=false) %}
+    {% for battery in batteries %}
+      {% if battery.can_charge
+            and battery.cooldown_s | float(0) > 0
+            and battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0)
+            and battery.max_charge | float(0) > battery.current_charge | float(0) %}
+        {% set ns.available = true %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.available }}
   responsive_discharge_export_trim_w: >-
     {% if raw_export_w | float(0) <= 0
           or responsive_discharge_trim_cooldown_s | float(0) <= 0
@@ -426,7 +437,9 @@ variables:
       {{ [raw_export_w | float(0), control_deadband_w | float(0)] | min }}
     {% endif %}
   cooldown_ready_discharge_export_trim_w: >-
-    {% if raw_export_w | float(0) < control_deadband_w | float(0) %}
+    {% if responsive_charge_absorber_available | bool %}
+      0
+    {% elif raw_export_w | float(0) < control_deadband_w | float(0) %}
       0
     {% else %}
       {{ [raw_export_w | float(0), control_deadband_w | float(0)] | min }}
@@ -583,7 +596,10 @@ variables:
           {% endif %}
           {% if ns.remaining > 0 and not battery.discharge_locked %}
             {% set headroom = [battery.max_discharge - current_allocation, 0] | max %}
-            {% set allocation = [headroom, ns.remaining] | min %}
+            {% set increase_allowed = raw_export_w | float(0) <= 0
+                  or not (responsive_charge_absorber_available | bool)
+                  or battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
+            {% set allocation = [headroom, ns.remaining] | min if increase_allowed else 0 %}
             {% if battery.slot == 1 %}
               {% set ns.t1 = (current_allocation + allocation) | round(0) %}
             {% elif battery.slot == 2 %}
@@ -614,8 +630,8 @@ variables:
                 and battery.actual_power_fresh
                 and raw_export_w | float(0) > control_deadband_w | float(0)
                 and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
-          {% set trim_allowed = not battery.discharge_locked
-                or battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
+          {% set trim_allowed = battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0)
+                or not (responsive_charge_absorber_available | bool) %}
           {% if current_allocation > 0
                 and battery.actual_power_fresh
                 and battery.target_age_s | float(0) < battery.response_grace_s | float(0)
