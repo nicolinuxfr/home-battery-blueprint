@@ -82,7 +82,11 @@ slot___SLOT___actual_power_usable: >-
 slot___SLOT___effective_balance_power: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% if current_target == 0 %}
-    0
+    {% if slot___SLOT___actual_power_usable | bool %}
+      {{ (slot___SLOT___actual_discharge_w | float(0)) - (slot___SLOT___actual_charge_w | float(0)) }}
+    {% else %}
+      0
+    {% endif %}
   {% elif not (slot___SLOT___actual_power_sensor_configured | bool) %}
     {{ current_target }}
   {% elif slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
@@ -101,7 +105,7 @@ slot___SLOT___effective_balance_power: >-
 slot___SLOT___reserved_balance_power: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% if current_target == 0 %}
-    0
+    {{ slot___SLOT___effective_balance_power | float(0) }}
   {% elif slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
     {{ current_target }}
   {% else %}

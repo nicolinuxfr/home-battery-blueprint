@@ -92,8 +92,17 @@ should_write_target_power___SLOT__: >-
     false
   {% endif %}
 should_run_discharge_actions___SLOT__: >-
-  {% if not slot___SLOT___has_discharge_actions or signed_target___SLOT__ | float(0) <= 0 %}
+  {% if not slot___SLOT___has_discharge_actions %}
     false
+  {% elif signed_target___SLOT__ | float(0) <= 0 %}
+    {{ (
+         slot___SLOT___current_target_sign | int(0) == 1
+         and target_value_changed___SLOT__ | bool
+       ) or (
+         slot___SLOT___actual_power_usable | bool
+         and slot___SLOT___actual_discharge_w | float(0) > release_deadband_w | float(0)
+         and discharge_cooldown_ok___SLOT__ | bool
+       ) }}
   {% elif discharge_increase_blocked_by_locked_reduction___SLOT__ | bool %}
     false
   {% elif slot___SLOT___current_target_sign | int(0) != 1 %}
@@ -111,8 +120,17 @@ should_run_discharge_actions___SLOT__: >-
            and signed_target___SLOT__ | float(0) < slot___SLOT___current_target_w | float(0)) }}
   {% endif %}
 should_run_charge_actions___SLOT__: >-
-  {% if not slot___SLOT___has_charge_actions or signed_target___SLOT__ | float(0) >= 0 %}
+  {% if not slot___SLOT___has_charge_actions %}
     false
+  {% elif signed_target___SLOT__ | float(0) >= 0 %}
+    {{ (
+         slot___SLOT___current_target_sign | int(0) == -1
+         and target_value_changed___SLOT__ | bool
+       ) or (
+         slot___SLOT___actual_power_usable | bool
+         and slot___SLOT___actual_charge_w | float(0) > release_deadband_w | float(0)
+         and charge_cooldown_ok___SLOT__ | bool
+       ) }}
   {% elif slot___SLOT___current_target_sign | int(0) != -1 %}
     {{ start_from_zero_flow_confirmed___SLOT__ | bool
        or (operating_mode == 'off_peak_charge' and charge_cooldown_ok___SLOT__ | bool)

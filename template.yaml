@@ -200,6 +200,20 @@ variables:
       + (slot_3_effective_balance_power | float(0))
       + (slot_4_effective_balance_power | float(0))
     }}
+  uncommanded_actual_discharge_w: >-
+    {{
+      (slot_1_actual_discharge_w | float(0) if slot_1_current_target_w | float(0) <= 0 and slot_1_actual_power_usable | bool else 0)
+      + (slot_2_actual_discharge_w | float(0) if slot_2_current_target_w | float(0) <= 0 and slot_2_actual_power_usable | bool else 0)
+      + (slot_3_actual_discharge_w | float(0) if slot_3_current_target_w | float(0) <= 0 and slot_3_actual_power_usable | bool else 0)
+      + (slot_4_actual_discharge_w | float(0) if slot_4_current_target_w | float(0) <= 0 and slot_4_actual_power_usable | bool else 0)
+    }}
+  uncommanded_actual_charge_w: >-
+    {{
+      (slot_1_actual_charge_w | float(0) if slot_1_current_target_w | float(0) >= 0 and slot_1_actual_power_usable | bool else 0)
+      + (slot_2_actual_charge_w | float(0) if slot_2_current_target_w | float(0) >= 0 and slot_2_actual_power_usable | bool else 0)
+      + (slot_3_actual_charge_w | float(0) if slot_3_current_target_w | float(0) >= 0 and slot_3_actual_power_usable | bool else 0)
+      + (slot_4_actual_charge_w | float(0) if slot_4_current_target_w | float(0) >= 0 and slot_4_actual_power_usable | bool else 0)
+    }}
   raw_export_w: "{{ [0 - house_power_w, 0] | max if house_power_valid else 0 }}"
   discharge_export_guard_w: >-
     {% if not house_power_valid %}
@@ -529,7 +543,7 @@ variables:
 
   discharge_plan: >-
     {% set ns = namespace(
-      remaining=import_need_w | float(0),
+      remaining=[(import_need_w | float(0)) - (uncommanded_actual_discharge_w | float(0)), 0] | max,
       trim_remaining=0,
       trimmed_locked_w=0,
       chargeable_raw_export_w=raw_export_w | float(0),
@@ -758,9 +772,9 @@ variables:
   charge_targets: >-
     {% set batteries = emergency_charge_order if emergency_charge_active | bool else charge_order %}
     {% set charge_need = emergency_charge_surplus_w | float(0) if emergency_charge_active | bool else export_surplus_w | float(0) %}
-    {% set ns = namespace(remaining=charge_need, t1=0, t2=0, t3=0, t4=0) %}
+    {% set ns = namespace(remaining=[(charge_need | float(0)) - (uncommanded_actual_charge_w | float(0)), 0] | max, t1=0, t2=0, t3=0, t4=0) %}
     {% if operating_mode == 'off_peak_charge' %}
-      {% set ns.remaining = off_peak_available_charge_w | float(0) %}
+      {% set ns.remaining = [(off_peak_available_charge_w | float(0)) - (uncommanded_actual_charge_w | float(0)), 0] | max %}
       {% for battery in off_peak_charge_order %}
         {% set stagger_ready = off_peak_elapsed_minutes | float(0) >= loop.index * 15 %}
         {% if stagger_ready and battery.charge_locked %}
