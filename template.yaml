@@ -68,6 +68,10 @@ blueprint:
 mode: restart
 
 triggers:
+  - trigger: homeassistant
+    event: start
+  - trigger: event
+    event_type: automation_reloaded
   - trigger: state
     entity_id: !input house_power_sensor
     not_to: null
