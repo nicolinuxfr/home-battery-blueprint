@@ -810,13 +810,13 @@ variables:
       {% for battery in batteries %}
         {% set battery_discharge_target = 0 %}
         {% if battery.slot == 1 %}
-          {% set battery_discharge_target = discharge_target_1 | float(0) %}
+          {% set battery_discharge_target = discharge_targets['1'] | float(0) %}
         {% elif battery.slot == 2 %}
-          {% set battery_discharge_target = discharge_target_2 | float(0) %}
+          {% set battery_discharge_target = discharge_targets['2'] | float(0) %}
         {% elif battery.slot == 3 %}
-          {% set battery_discharge_target = discharge_target_3 | float(0) %}
+          {% set battery_discharge_target = discharge_targets['3'] | float(0) %}
         {% elif battery.slot == 4 %}
-          {% set battery_discharge_target = discharge_target_4 | float(0) %}
+          {% set battery_discharge_target = discharge_targets['4'] | float(0) %}
         {% endif %}
         {% if battery.charge_locked
               and (operating_mode == 'charge' or battery_discharge_target < control_deadband_w | float(0)) %}
@@ -837,13 +837,13 @@ variables:
       {% for battery in batteries %}
         {% set battery_discharge_target = 0 %}
         {% if battery.slot == 1 %}
-          {% set battery_discharge_target = discharge_target_1 | float(0) %}
+          {% set battery_discharge_target = discharge_targets['1'] | float(0) %}
         {% elif battery.slot == 2 %}
-          {% set battery_discharge_target = discharge_target_2 | float(0) %}
+          {% set battery_discharge_target = discharge_targets['2'] | float(0) %}
         {% elif battery.slot == 3 %}
-          {% set battery_discharge_target = discharge_target_3 | float(0) %}
+          {% set battery_discharge_target = discharge_targets['3'] | float(0) %}
         {% elif battery.slot == 4 %}
-          {% set battery_discharge_target = discharge_target_4 | float(0) %}
+          {% set battery_discharge_target = discharge_targets['4'] | float(0) %}
         {% endif %}
         {% if not battery.charge_locked
               and (operating_mode == 'charge' or battery_discharge_target < control_deadband_w | float(0)) %}
