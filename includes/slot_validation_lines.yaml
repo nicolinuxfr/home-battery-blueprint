@@ -1,0 +1,16 @@
+{% if slot___SLOT___used %}
+  {% set has_target_entity = slot___SLOT___target_entity_configured | bool %}
+  {% set discharge_power_enabled = battery___SLOT___max_discharge_w | float(0) > 0 %}
+  {% set charge_power_enabled = battery___SLOT___max_charge_w | float(0) > 0 %}
+  {% if not has_target_entity %}
+    {% set error_text -%}
+      [[slot.__SLOT__]] [[validation.no_target_entity.suffix]]
+    {%- endset %}
+    {% set ns.errors = ns.errors + [error_text | trim] %}
+  {% elif not (discharge_power_enabled or charge_power_enabled) %}
+    {% set error_text -%}
+      [[slot.__SLOT__]] [[validation.no_power.suffix]]
+    {%- endset %}
+    {% set ns.errors = ns.errors + [error_text | trim] %}
+  {% endif %}
+{% endif %}

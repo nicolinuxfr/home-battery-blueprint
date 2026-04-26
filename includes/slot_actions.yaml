@@ -1,0 +1,125 @@
+- alias: "[[slot.__SLOT__]]: [[trace.write_target_suffix]]"
+  choose:
+    - alias: "[[slot.__SLOT__]]: [[trace.target_update_branch_suffix]]"
+      conditions:
+        - condition: template
+          value_template: "{{ should_write_target_power___SLOT__ }}"
+        - condition: template
+          value_template: >-
+            {% set sensor_state = states(house_power_sensor) %}
+            {% set sensor_valid = sensor_state not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ sensor_valid }}
+      sequence:
+        - alias: "[[slot.__SLOT__]]: [[trace.prepare_target_context_suffix]]"
+          variables:
+            battery_slot: __SLOT__
+            battery_soc: "{{ slot___SLOT___soc }}"
+            house_power_w: "{{ house_power_w }}"
+            import_need_w: "{{ import_need_w }}"
+            export_surplus_w: "{{ export_surplus_w }}"
+            off_peak_active: "{{ off_peak_active }}"
+            off_peak_target_soc_pct: "{{ off_peak_target_soc_pct }}"
+            solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh }}"
+            solar_reserve_share_pct: "{{ solar_reserve_share_pct }}"
+            target_power_w: "{{ signed_target___SLOT__ }}"
+            target_discharge_w: "{{ discharge_target___SLOT__ }}"
+            target_charge_w: "{{ charge_target___SLOT__ }}"
+            target_power_value: "{{ target_power_w | round(0) | int(0) }}"
+        - alias: "[[slot.__SLOT__]]: [[trace.select_target_service_suffix]]"
+          choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ battery___SLOT___target_power_entity.startswith('number.') }}"
+              sequence:
+                - alias: "[[slot.__SLOT__]]: [[trace.write_number_target_suffix]]"
+                  action: number.set_value
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ battery___SLOT___target_power_entity }}"
+                  data:
+                    value: >-
+                      {% set entity_min = state_attr(battery___SLOT___target_power_entity, 'min') %}
+                      {% if target_power_value | int(0) > 0
+                            and entity_min is number
+                            and entity_min | float(0) > 0
+                            and target_power_value | int(0) < entity_min | float(0) %}
+                        {{ entity_min | float(0) | round(0) | int(0) }}
+                      {% else %}
+                        {{ target_power_value | int(0) }}
+                      {% endif %}
+            - conditions:
+                - condition: template
+                  value_template: "{{ battery___SLOT___target_power_entity.startswith('input_number.') }}"
+              sequence:
+                - alias: "[[slot.__SLOT__]]: [[trace.write_input_number_target_suffix]]"
+                  action: input_number.set_value
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ battery___SLOT___target_power_entity }}"
+                  data:
+                    value: >-
+                      {% set entity_min = state_attr(battery___SLOT___target_power_entity, 'min') %}
+                      {% if target_power_value | int(0) > 0
+                            and entity_min is number
+                            and entity_min | float(0) > 0
+                            and target_power_value | int(0) < entity_min | float(0) %}
+                        {{ entity_min | float(0) | round(0) | int(0) }}
+                      {% else %}
+                        {{ target_power_value | int(0) }}
+                      {% endif %}
+- alias: "[[slot.__SLOT__]]: [[trace.run_discharge_actions_suffix]]"
+  choose:
+    - alias: "[[slot.__SLOT__]]: [[trace.discharge_actions_branch_suffix]]"
+      conditions:
+        - condition: template
+          value_template: "{{ should_run_discharge_actions___SLOT__ }}"
+        - condition: template
+          value_template: >-
+            {% set sensor_state = states(house_power_sensor) %}
+            {{ sensor_state not in ['unknown', 'unavailable', 'none', ''] }}
+      sequence:
+        - alias: "[[slot.__SLOT__]]: [[trace.prepare_discharge_context_suffix]]"
+          variables:
+            battery_slot: __SLOT__
+            battery_soc: "{{ slot___SLOT___soc }}"
+            house_power_w: "{{ house_power_w }}"
+            import_need_w: "{{ import_need_w }}"
+            export_surplus_w: "{{ export_surplus_w }}"
+            off_peak_active: "{{ off_peak_active }}"
+            off_peak_target_soc_pct: "{{ off_peak_target_soc_pct }}"
+            solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh }}"
+            solar_reserve_share_pct: "{{ solar_reserve_share_pct }}"
+            target_power_w: "{{ signed_target___SLOT__ }}"
+            target_discharge_w: "{{ discharge_target___SLOT__ }}"
+            target_charge_w: "{{ charge_target___SLOT__ }}"
+        - alias: "[[slot.__SLOT__]]: [[trace.execute_discharge_actions_suffix]]"
+          choose: []
+          default: !input battery___SLOT___discharge_actions
+- alias: "[[slot.__SLOT__]]: [[trace.run_charge_actions_suffix]]"
+  choose:
+    - alias: "[[slot.__SLOT__]]: [[trace.charge_actions_branch_suffix]]"
+      conditions:
+        - condition: template
+          value_template: "{{ should_run_charge_actions___SLOT__ }}"
+        - condition: template
+          value_template: >-
+            {% set sensor_state = states(house_power_sensor) %}
+            {{ sensor_state not in ['unknown', 'unavailable', 'none', ''] }}
+      sequence:
+        - alias: "[[slot.__SLOT__]]: [[trace.prepare_charge_context_suffix]]"
+          variables:
+            battery_slot: __SLOT__
+            battery_soc: "{{ slot___SLOT___soc }}"
+            house_power_w: "{{ house_power_w }}"
+            import_need_w: "{{ import_need_w }}"
+            export_surplus_w: "{{ export_surplus_w }}"
+            off_peak_active: "{{ off_peak_active }}"
+            off_peak_target_soc_pct: "{{ off_peak_target_soc_pct }}"
+            solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh }}"
+            solar_reserve_share_pct: "{{ solar_reserve_share_pct }}"
+            target_power_w: "{{ signed_target___SLOT__ }}"
+            target_discharge_w: "{{ discharge_target___SLOT__ }}"
+            target_charge_w: "{{ charge_target___SLOT__ }}"
+        - alias: "[[slot.__SLOT__]]: [[trace.execute_charge_actions_suffix]]"
+          choose: []
+          default: !input battery___SLOT___charge_actions

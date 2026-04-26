@@ -1,0 +1,131 @@
+slot___SLOT___used: "{{ battery___SLOT___soc_sensor != '' }}"
+slot___SLOT___soc: "{{ states(battery___SLOT___soc_sensor) | float(0) if slot___SLOT___used else 0 }}"
+slot___SLOT___target_entity_configured: "{{ battery___SLOT___target_power_entity != '' }}"
+slot___SLOT___target_power_state: >-
+  {% if slot___SLOT___target_entity_configured %}
+    {{ states(battery___SLOT___target_power_entity) }}
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___target_last_changed_ts: >-
+  {% if slot___SLOT___target_entity_configured %}
+    {% set target_state = states[battery___SLOT___target_power_entity] %}
+    {{ as_timestamp(target_state.last_changed, 0) if target_state is not none else 0 }}
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___target_age_s: >-
+  {% if slot___SLOT___target_last_changed_ts | float(0) > 0 %}
+    {{ [run_started_ts | float(0) - (slot___SLOT___target_last_changed_ts | float(0)), 0] | max }}
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___response_grace_s: "{{ [20, battery___SLOT___cooldown_seconds | float(0)] | max }}"
+slot___SLOT___current_target_w: >-
+  {% if slot___SLOT___target_power_state in ['unknown', 'unavailable', 'none', ''] %}
+    0
+  {% else %}
+    {{ slot___SLOT___target_power_state | float(0) }}
+  {% endif %}
+slot___SLOT___current_target_sign: >-
+  {% if slot___SLOT___current_target_w | float(0) > 0 %}
+    1
+  {% elif slot___SLOT___current_target_w | float(0) < 0 %}
+    -1
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___actual_power_sensor_configured: "{{ battery___SLOT___actual_power_sensor != '' }}"
+slot___SLOT___actual_power_state: >-
+  {% if slot___SLOT___actual_power_sensor_configured %}
+    {{ states(battery___SLOT___actual_power_sensor) }}
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___actual_power_last_updated_ts: >-
+  {% if slot___SLOT___actual_power_sensor_configured %}
+    {% set actual_state = states[battery___SLOT___actual_power_sensor] %}
+    {{ as_timestamp(actual_state.last_updated, 0) if actual_state is not none else 0 }}
+  {% else %}
+    0
+  {% endif %}
+slot___SLOT___actual_power_age_s: >-
+  {% if slot___SLOT___actual_power_last_updated_ts | float(0) > 0 %}
+    {{ [run_started_ts | float(0) - (slot___SLOT___actual_power_last_updated_ts | float(0)), 0] | max }}
+  {% else %}
+    999999
+  {% endif %}
+slot___SLOT___actual_power_w: >-
+  {% if slot___SLOT___actual_power_state in ['unknown', 'unavailable', 'none', ''] %}
+    0
+  {% else %}
+    {{ slot___SLOT___actual_power_state | float(0) }}
+  {% endif %}
+slot___SLOT___actual_power_valid: "{{ slot___SLOT___actual_power_sensor_configured | bool and is_number(slot___SLOT___actual_power_state) }}"
+slot___SLOT___actual_discharge_w: "{{ [slot___SLOT___actual_power_w | float(0), 0] | max }}"
+slot___SLOT___actual_charge_w: "{{ [0 - (slot___SLOT___actual_power_w | float(0)), 0] | max }}"
+slot___SLOT___actual_power_fresh: >-
+  {% if not (slot___SLOT___actual_power_valid | bool) %}
+    false
+  {% else %}
+    {{ slot___SLOT___actual_power_age_s | float(999999) <= [slot___SLOT___response_grace_s | float(0), 45] | max }}
+  {% endif %}
+slot___SLOT___actual_power_stale: >-
+  {{ slot___SLOT___actual_power_sensor_configured | bool
+     and (
+       not (slot___SLOT___actual_power_valid | bool)
+       or slot___SLOT___actual_power_age_s | float(999999) > actual_power_stale_timeout_s | float(0)
+     ) }}
+slot___SLOT___actual_power_usable: >-
+  {{ slot___SLOT___actual_power_valid | bool
+     and not (slot___SLOT___actual_power_stale | bool) }}
+slot___SLOT___effective_balance_power: >-
+  {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% if current_target == 0 %}
+    0
+  {% elif not (slot___SLOT___actual_power_sensor_configured | bool) %}
+    {{ current_target }}
+  {% elif slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
+    {{ current_target }}
+  {% elif slot___SLOT___actual_power_usable | bool %}
+    {% if current_target > 0 %}
+      {{ slot___SLOT___actual_discharge_w | float(0) }}
+    {% else %}
+      {{ 0 - (slot___SLOT___actual_charge_w | float(0)) }}
+    {% endif %}
+  {% elif slot___SLOT___actual_power_stale | bool %}
+    0
+  {% else %}
+    {{ current_target }}
+  {% endif %}
+slot___SLOT___reserved_balance_power: >-
+  {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% if current_target == 0 %}
+    0
+  {% elif slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
+    {{ current_target }}
+  {% else %}
+    {{ slot___SLOT___effective_balance_power | float(0) }}
+  {% endif %}
+slot___SLOT___has_discharge_actions: "{{ battery___SLOT___discharge_actions | count > 0 }}"
+slot___SLOT___has_charge_actions: "{{ battery___SLOT___charge_actions | count > 0 }}"
+slot___SLOT___discharge_delivery_stalled: >-
+  {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% set actual_discharge = slot___SLOT___actual_discharge_w | float(0) %}
+  {% if current_target <= 0
+        or slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
+    false
+  {% elif slot___SLOT___actual_power_stale | bool %}
+    true
+  {% elif slot___SLOT___actual_power_usable | bool %}
+    {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
+  {% else %}
+    false
+  {% endif %}
+slot___SLOT___charge_delivery_stalled: "false"
+slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 }}"
+slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 }}"
+slot___SLOT___can_off_peak_charge: >-
+  {{ slot___SLOT___can_charge | bool
+     and battery___SLOT___off_peak_charge_enabled | bool
+     and battery___SLOT___usable_capacity_kwh | float(0) > 0 }}

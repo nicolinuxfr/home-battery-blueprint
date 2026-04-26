@@ -1,0 +1,94 @@
+battery___SLOT___section:
+  name: "[[slot.__SLOT__]]"
+  icon: mdi:battery
+  collapsed: true
+  input:
+    battery___SLOT___soc_sensor:
+      name: "[[input.battery.soc_sensor.name]]"
+      description: "[[input.battery.soc_sensor.description]]"
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: battery
+    battery___SLOT___max_discharge_w:
+      name: "[[input.battery.max_discharge_w.name]]"
+      description: "[[input.battery.max_discharge_w.description]]"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 5000
+          step: 10
+          unit_of_measurement: W
+          mode: box
+    battery___SLOT___max_charge_w:
+      name: "[[input.battery.max_charge_w.name]]"
+      description: "[[input.battery.max_charge_w.description]]"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 5000
+          step: 10
+          unit_of_measurement: W
+          mode: box
+    battery___SLOT___usable_capacity_kwh:
+      name: "[[input.battery.usable_capacity_kwh.name]]"
+      description: "[[input.battery.usable_capacity_kwh.description]]"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 0.1
+          unit_of_measurement: kWh
+          mode: box
+    battery___SLOT___off_peak_charge_enabled:
+      name: "[[input.battery.off_peak_charge_enabled.name]]"
+      description: "[[input.battery.off_peak_charge_enabled.description]]"
+      default: false
+      selector:
+        boolean: {}
+    battery___SLOT___cooldown_seconds:
+      name: "[[input.battery.cooldown_seconds.name]]"
+      description: "[[input.battery.cooldown_seconds.description]]"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 300
+          step: 5
+          unit_of_measurement: s
+          mode: slider
+    battery___SLOT___target_power_entity:
+      name: "[[input.battery.target_power_entity.name]]"
+      description: "[[input.battery.target_power_entity.description]]"
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: number
+            - domain: input_number
+    battery___SLOT___actual_power_sensor:
+      name: "[[input.battery.actual_power_sensor.name]]"
+      description: "[[input.battery.actual_power_sensor.description]]"
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: power
+    battery___SLOT___discharge_actions:
+      name: "[[input.battery.discharge_actions.name]]"
+      description: "[[input.battery.discharge_actions.description]]"
+      default: []
+      selector:
+        action: {}
+    battery___SLOT___charge_actions:
+      name: "[[input.battery.charge_actions.name]]"
+      description: "[[input.battery.charge_actions.description]]"
+      default: []
+      selector:
+        action: {}

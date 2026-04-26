@@ -1,0 +1,12 @@
+slot___SLOT___cooldown_elapsed: >-
+  {% if battery___SLOT___cooldown_seconds | float(0) <= 0 %}
+    true
+  {% elif slot___SLOT___target_last_changed_ts | float(0) <= 0 %}
+    true
+  {% else %}
+    {{ run_started_ts | float(0) - (slot___SLOT___target_last_changed_ts | float(0)) >= battery___SLOT___cooldown_seconds | float(0) }}
+  {% endif %}
+discharge_cooldown_ok___SLOT__: >-
+  {{ (slot___SLOT___can_discharge | bool) and (slot___SLOT___cooldown_elapsed | bool) }}
+charge_cooldown_ok___SLOT__: >-
+  {{ (slot___SLOT___can_charge | bool) and (slot___SLOT___cooldown_elapsed | bool) }}

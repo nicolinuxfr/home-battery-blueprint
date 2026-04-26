@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.4.7
+
+- Add the ability to charge the battery during off-peak hours ;
+- Refactor : more files, shorter.
+
 ## 2026.4.6
 
 - Finer adjustments to be closer to 0 W and bug fixes.

@@ -1,0 +1,35 @@
+{% if slot___SLOT___used %}
+  {% set current_target = slot___SLOT___current_target_w | float(0) %}
+  {% set commanded_discharge = [current_target, 0] | max %}
+  {% set commanded_discharge = [commanded_discharge, battery___SLOT___max_discharge_w | float(0)] | min %}
+  {% set reserved_balance_power = slot___SLOT___reserved_balance_power | float(0) %}
+  {% set reserved_discharge = [reserved_balance_power, 0] | max %}
+  {% set reserved_charge = [0 - reserved_balance_power, 0] | max %}
+  {% set ns.items = ns.items + [{
+    'slot': __SLOT__,
+    'soc': slot___SLOT___soc | float(0),
+    'headroom_priority': slot___SLOT___soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
+    'cooldown_s': battery___SLOT___cooldown_seconds | float(0),
+    'current_target': current_target,
+    'max_discharge': battery___SLOT___max_discharge_w | float(0),
+    'max_charge': battery___SLOT___max_charge_w | float(0),
+    'usable_capacity_kwh': battery___SLOT___usable_capacity_kwh | float(0),
+    'can_discharge': slot___SLOT___can_discharge | bool,
+    'discharge_available': (slot___SLOT___can_discharge | bool) and not (slot___SLOT___discharge_delivery_stalled | bool),
+    'can_charge': slot___SLOT___can_charge | bool,
+    'off_peak_charge_enabled': battery___SLOT___off_peak_charge_enabled | bool,
+    'can_off_peak_charge': slot___SLOT___can_off_peak_charge | bool,
+    'commanded_discharge': commanded_discharge,
+    'current_discharge': reserved_discharge,
+    'current_charge': reserved_charge,
+    'actual_power_fresh': slot___SLOT___actual_power_fresh | bool,
+    'actual_power_stale': slot___SLOT___actual_power_stale | bool,
+    'actual_power_usable': slot___SLOT___actual_power_usable | bool,
+    'actual_discharge': slot___SLOT___actual_discharge_w | float(0),
+    'target_age_s': slot___SLOT___target_age_s | float(0),
+    'response_grace_s': slot___SLOT___response_grace_s | float(0),
+    'discharge_delivery_stalled': slot___SLOT___discharge_delivery_stalled | bool,
+    'discharge_locked': slot___SLOT___can_discharge and not (slot___SLOT___discharge_delivery_stalled | bool) and current_target > 0 and not (discharge_cooldown_ok___SLOT__ | bool),
+    'charge_locked': slot___SLOT___can_charge and current_target < 0 and not (charge_cooldown_ok___SLOT__ | bool)
+  }] %}
+{% endif %}
