@@ -867,7 +867,8 @@ variables:
         {% elif battery.slot == 4 %}
           {% set battery_discharge_target = discharge_targets['4'] | float(0) %}
         {% endif %}
-        {% if not battery.charge_locked
+        {% if ns.remaining > 0
+              and not battery.charge_locked
               and (not battery.discharge_locked or battery.responsive)
               and (operating_mode == 'charge' or battery_discharge_target < control_deadband_w | float(0)) %}
           {% set allocation = [battery.max_charge, ns.remaining] | min %}
