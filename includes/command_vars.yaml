@@ -41,9 +41,19 @@ same_direction_small_adjustment___SLOT__: >-
      and desired_target_sign___SLOT__ | int(0) != 0
      and desired_target_sign___SLOT__ | int(0) == slot___SLOT___current_target_sign | int(0)
      and same_direction_target_delta_w___SLOT__ | float(0) < control_deadband_w | float(0) }}
+direction_change_blocked_by_cooldown___SLOT__: >-
+  {{ desired_target_sign___SLOT__ | int(0) != 0
+     and slot___SLOT___current_target_sign | int(0) != 0
+     and desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0)
+     and not (responsive_target_allowed___SLOT__ | bool)
+     and not (slot___SLOT___cooldown_elapsed | bool) }}
 start_from_zero_flow_confirmed___SLOT__: >-
   {{ slot___SLOT___current_target_sign | int(0) == 0
      and allow_confirmed_flow_start_from_zero | bool
+     and (
+       responsive_target_allowed___SLOT__ | bool
+       or slot___SLOT___cooldown_elapsed | bool
+     )
      and (
        (desired_target_sign___SLOT__ | int(0) == 1
         and house_power_valid
@@ -64,6 +74,8 @@ should_write_target_power___SLOT__: >-
     false
   {% elif desired_target_sign___SLOT__ | int(0) == 0 %}
     {{ slot___SLOT___current_target_sign | int(0) != 0 }}
+  {% elif direction_change_blocked_by_cooldown___SLOT__ | bool %}
+    false
   {% elif desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0)
         and slot___SLOT___current_target_sign | int(0) != 0 %}
     true
@@ -87,6 +99,8 @@ should_write_target_power___SLOT__: >-
   {% endif %}
 should_run_discharge_actions___SLOT__: >-
   {% if not slot___SLOT___has_discharge_actions %}
+    false
+  {% elif direction_change_blocked_by_cooldown___SLOT__ | bool %}
     false
   {% elif signed_target___SLOT__ | float(0) <= 0 %}
     {{ (
@@ -115,6 +129,8 @@ should_run_discharge_actions___SLOT__: >-
   {% endif %}
 should_run_charge_actions___SLOT__: >-
   {% if not slot___SLOT___has_charge_actions %}
+    false
+  {% elif direction_change_blocked_by_cooldown___SLOT__ | bool %}
     false
   {% elif signed_target___SLOT__ | float(0) >= 0 %}
     {{ (

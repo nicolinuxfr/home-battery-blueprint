@@ -182,9 +182,8 @@ variables:
   house_power_w: "{{ house_power_state | float(0) if house_power_valid | bool else 0 }}"
 
   # Generated slot state treats actual-power telemetry as a guardrail: stale
-  # telemetry does not block an idle battery from starting, but an active
-  # battery that still reports stale or missing delivery after its response
-  # window is kept out of extra discharge allocation.
+  # telemetry never proves that a battery is stalled. When telemetry is stale,
+  # allocation falls back to the commanded target and waits for a valid reading.
   [[generated.slot_state_vars]]
 
   # Rebuild the underlying house demand from the net house meter plus the
@@ -594,7 +593,9 @@ variables:
           {% elif battery.slot == 4 %}
             {% set current_allocation = ns.t4 | float(0) %}
           {% endif %}
-          {% if ns.remaining > 0 and not battery.discharge_locked %}
+          {% if ns.remaining > 0
+                and not battery.discharge_locked
+                and (not battery.charge_locked or battery.responsive) %}
             {% set headroom = [battery.max_discharge - current_allocation, 0] | max %}
             {% set increase_allowed = raw_export_w | float(0) <= 0
                   or not (responsive_charge_absorber_available | bool)
@@ -809,7 +810,10 @@ variables:
       {% endfor %}
       {% for battery in off_peak_charge_order %}
         {% set stagger_ready = off_peak_elapsed_minutes | float(0) >= loop.index * 15 %}
-        {% if ns.remaining > 0 and stagger_ready and not battery.charge_locked %}
+        {% if ns.remaining > 0
+              and stagger_ready
+              and not battery.charge_locked
+              and (not battery.discharge_locked or battery.responsive) %}
           {% set allocation = [battery.max_charge, ns.remaining] | min %}
           {% set allocation = [allocation, 0] | max %}
           {% if battery.slot == 1 %}
@@ -864,6 +868,7 @@ variables:
           {% set battery_discharge_target = discharge_targets['4'] | float(0) %}
         {% endif %}
         {% if not battery.charge_locked
+              and (not battery.discharge_locked or battery.responsive)
               and (operating_mode == 'charge' or battery_discharge_target < control_deadband_w | float(0)) %}
           {% set allocation = [battery.max_charge, ns.remaining] | min %}
           {% set allocation = [allocation, 0] | max %}

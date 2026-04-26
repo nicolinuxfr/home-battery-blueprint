@@ -98,7 +98,7 @@ slot___SLOT___effective_balance_power: >-
       {{ 0 - (slot___SLOT___actual_charge_w | float(0)) }}
     {% endif %}
   {% elif slot___SLOT___actual_power_stale | bool %}
-    0
+    {{ current_target }}
   {% else %}
     {{ current_target }}
   {% endif %}
@@ -120,7 +120,7 @@ slot___SLOT___discharge_delivery_stalled: >-
         or slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
     false
   {% elif slot___SLOT___actual_power_stale | bool %}
-    true
+    false
   {% elif slot___SLOT___actual_power_usable | bool %}
     {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
   {% else %}
