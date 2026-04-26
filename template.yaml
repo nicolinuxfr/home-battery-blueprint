@@ -614,6 +614,8 @@ variables:
                 and battery.actual_power_fresh
                 and raw_export_w | float(0) > control_deadband_w | float(0)
                 and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
+          {% set trim_allowed = not battery.discharge_locked
+                or battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
           {% if current_allocation > 0
                 and battery.actual_power_fresh
                 and battery.target_age_s | float(0) < battery.response_grace_s | float(0)
@@ -624,7 +626,7 @@ variables:
               {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - pending_actual_drop, 0] | max %}
             {% endif %}
           {% endif %}
-          {% set trim_allocation = [current_allocation, ns.trim_remaining] | min %}
+          {% set trim_allocation = [current_allocation, ns.trim_remaining] | min if trim_allowed else 0 %}
           {% if battery.slot == 1 %}
             {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
           {% elif battery.slot == 2 %}
