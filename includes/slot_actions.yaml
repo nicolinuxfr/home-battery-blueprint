@@ -43,7 +43,11 @@
                             and entity_min is number
                             and entity_min | float(0) > 0
                             and target_power_value | int(0) < entity_min | float(0) %}
-                        {{ entity_min | float(0) | round(0) | int(0) }}
+                        {% if house_power_w | float(0) < 0 %}
+                          0
+                        {% else %}
+                          {{ entity_min | float(0) | round(0) | int(0) }}
+                        {% endif %}
                       {% else %}
                         {{ target_power_value | int(0) }}
                       {% endif %}
@@ -63,7 +67,11 @@
                             and entity_min is number
                             and entity_min | float(0) > 0
                             and target_power_value | int(0) < entity_min | float(0) %}
-                        {{ entity_min | float(0) | round(0) | int(0) }}
+                        {% if house_power_w | float(0) < 0 %}
+                          0
+                        {% else %}
+                          {{ entity_min | float(0) | round(0) | int(0) }}
+                        {% endif %}
                       {% else %}
                         {{ target_power_value | int(0) }}
                       {% endif %}

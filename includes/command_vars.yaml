@@ -11,15 +11,9 @@ responsive_target_allowed___SLOT__: >-
          and battery___SLOT___cooldown_seconds | float(0) == responsive_charge_target_cooldown_s | float(0)
        )
      ) }}
-slot_command_deadband_w___SLOT__: >-
-  {% if responsive_target_allowed___SLOT__ | bool %}
-    {{ minimum_target_delta_w | float(0) }}
-  {% else %}
-    {{ command_deadband_w | float(0) }}
-  {% endif %}
-discharge_active___SLOT__: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target___SLOT__ >= slot_command_deadband_w___SLOT__ | float(0) }}"
-charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold', 'off_peak_charge'] or emergency_charge_active | bool) and charge_target___SLOT__ >= slot_command_deadband_w___SLOT__ | float(0) }}"
-neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target___SLOT__ | abs >= slot_command_deadband_w___SLOT__ | float(0) }}"
+discharge_active___SLOT__: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target___SLOT__ >= control_deadband_w | float(0) }}"
+charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold', 'off_peak_charge'] or emergency_charge_active | bool) and charge_target___SLOT__ >= control_deadband_w | float(0) }}"
+neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target___SLOT__ | abs >= control_deadband_w | float(0) }}"
 signed_target___SLOT__: >-
   {% if discharge_active___SLOT__ %}
     {{ discharge_target___SLOT__ | float(0) }}
@@ -46,18 +40,18 @@ same_direction_small_adjustment___SLOT__: >-
   {{ target_value_changed___SLOT__ | bool
      and desired_target_sign___SLOT__ | int(0) != 0
      and desired_target_sign___SLOT__ | int(0) == slot___SLOT___current_target_sign | int(0)
-     and same_direction_target_delta_w___SLOT__ | float(0) < minimum_target_delta_w | float(0) }}
+     and same_direction_target_delta_w___SLOT__ | float(0) < control_deadband_w | float(0) }}
 start_from_zero_flow_confirmed___SLOT__: >-
   {{ slot___SLOT___current_target_sign | int(0) == 0
      and allow_confirmed_flow_start_from_zero | bool
      and (
        (desired_target_sign___SLOT__ | int(0) == 1
         and house_power_valid
-        and house_power_w | float(0) >= command_deadband_w | float(0))
+        and house_power_w | float(0) >= control_deadband_w | float(0))
        or
        (desired_target_sign___SLOT__ | int(0) == -1
         and house_power_valid
-        and house_power_w | float(0) <= 0 - (command_deadband_w | float(0)))
+        and house_power_w | float(0) <= 0 - (control_deadband_w | float(0)))
      ) }}
 discharge_increase_blocked_by_locked_reduction___SLOT__: >-
   {{ locked_discharge_reduction_pending | bool
@@ -100,7 +94,7 @@ should_run_discharge_actions___SLOT__: >-
          and target_value_changed___SLOT__ | bool
        ) or (
          slot___SLOT___actual_power_usable | bool
-         and slot___SLOT___actual_discharge_w | float(0) > release_deadband_w | float(0)
+         and slot___SLOT___actual_discharge_w | float(0) > control_deadband_w | float(0)
          and discharge_cooldown_ok___SLOT__ | bool
        ) }}
   {% elif discharge_increase_blocked_by_locked_reduction___SLOT__ | bool %}
@@ -128,7 +122,7 @@ should_run_charge_actions___SLOT__: >-
          and target_value_changed___SLOT__ | bool
        ) or (
          slot___SLOT___actual_power_usable | bool
-         and slot___SLOT___actual_charge_w | float(0) > release_deadband_w | float(0)
+         and slot___SLOT___actual_charge_w | float(0) > control_deadband_w | float(0)
          and charge_cooldown_ok___SLOT__ | bool
        ) }}
   {% elif slot___SLOT___current_target_sign | int(0) != -1 %}

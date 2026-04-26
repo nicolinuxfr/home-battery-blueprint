@@ -96,10 +96,7 @@ variables:
   off_peak_import_limit_w: !input off_peak_import_limit_w
   solar_forecast_tomorrow_sensor: !input solar_forecast_tomorrow_sensor
   solar_reserve_share_pct: !input solar_reserve_share_pct
-  command_deadband_w: 60
-  release_deadband_w: 80
-  minimum_trigger_delta_w: 10
-  minimum_target_delta_w: 10
+  control_deadband_w: 10
   high_soc_headroom_threshold_pct: 90
   responsive_trim_max_cooldown_s: 10
   allow_confirmed_flow_start_from_zero: true
@@ -173,12 +170,12 @@ variables:
   should_skip_small_house_power_delta: >-
     {% if not triggered_by_house_power_sensor %}
       false
-    {% elif minimum_trigger_delta_w | float(0) <= 0 %}
+    {% elif control_deadband_w | float(0) <= 0 %}
       false
     {% elif house_power_trigger_delta_w is none %}
       false
     {% else %}
-      {{ house_power_trigger_delta_w | float(0) < minimum_trigger_delta_w | float(0) }}
+      {{ house_power_trigger_delta_w | float(0) < control_deadband_w | float(0) }}
     {% endif %}
   house_power_state: "{{ states(house_power_sensor) }}"
   house_power_valid: "{{ is_number(house_power_state) }}"
@@ -218,10 +215,10 @@ variables:
   discharge_export_guard_w: >-
     {% if not house_power_valid %}
       0
-    {% elif raw_export_w | float(0) <= release_deadband_w | float(0) %}
+    {% elif raw_export_w | float(0) <= control_deadband_w | float(0) %}
       0
     {% else %}
-      {{ (raw_export_w | float(0)) - (release_deadband_w | float(0)) }}
+      {{ (raw_export_w | float(0)) - (control_deadband_w | float(0)) }}
     {% endif %}
   discharge_export_guard_active: "{{ discharge_export_guard_w | float(0) > 0 }}"
   adjusted_house_power_w: >-
@@ -300,7 +297,7 @@ variables:
     {% endif %}
   off_peak_ready_to_charge: >-
     {{ off_peak_target_valid | bool
-       and off_peak_available_charge_w | float(0) >= command_deadband_w | float(0)
+       and off_peak_available_charge_w | float(0) >= control_deadband_w | float(0)
        and off_peak_elapsed_minutes | float(0) >= 15 }}
   current_total_discharge_w: >-
     {{
@@ -317,13 +314,13 @@ variables:
       + (0 - (slot_4_current_target_w | float(0)) if slot_4_current_target_w | float(0) < 0 else 0)
     }}
   hold_discharge_mode: >-
-    {{ current_total_discharge_w >= command_deadband_w
-       and import_need_w < command_deadband_w
-       and export_surplus_w < release_deadband_w }}
+    {{ current_total_discharge_w >= control_deadband_w
+       and import_need_w < control_deadband_w
+       and export_surplus_w < control_deadband_w }}
   hold_charge_mode: >-
-    {{ current_total_charge_w >= command_deadband_w
-       and export_surplus_w < command_deadband_w
-       and import_need_w < release_deadband_w }}
+    {{ current_total_charge_w >= control_deadband_w
+       and export_surplus_w < control_deadband_w
+       and import_need_w < control_deadband_w }}
 
   operating_mode: >-
     {% if validation_errors | count > 0 %}
@@ -334,11 +331,11 @@ variables:
       off_peak_charge
     {% elif off_peak_active | bool %}
       off_peak_idle
-    {% elif import_need_w >= command_deadband_w and discharge_capable_count > 0 %}
+    {% elif import_need_w >= control_deadband_w and discharge_capable_count > 0 %}
       discharge
     {% elif hold_discharge_mode %}
       discharge_hold
-    {% elif export_surplus_w >= command_deadband_w and charge_capable_count > 0 %}
+    {% elif export_surplus_w >= control_deadband_w and charge_capable_count > 0 %}
       charge
     {% elif hold_charge_mode %}
       charge_hold
@@ -426,13 +423,13 @@ variables:
           or responsive_discharge_trim_cooldown_s | float(0) > responsive_trim_max_cooldown_s | float(0) %}
       0
     {% else %}
-      {{ [raw_export_w | float(0), release_deadband_w | float(0)] | min }}
+      {{ [raw_export_w | float(0), control_deadband_w | float(0)] | min }}
     {% endif %}
   cooldown_ready_discharge_export_trim_w: >-
-    {% if raw_export_w | float(0) < minimum_target_delta_w | float(0) %}
+    {% if raw_export_w | float(0) < control_deadband_w | float(0) %}
       0
     {% else %}
-      {{ [raw_export_w | float(0), release_deadband_w | float(0)] | min }}
+      {{ [raw_export_w | float(0), control_deadband_w | float(0)] | min }}
     {% endif %}
   responsive_discharge_target_cooldown_s: >-
     {% set ns = namespace(cooldowns=[]) %}
@@ -536,9 +533,9 @@ variables:
   opportunistic_charge_threshold_w: >-
     {% if responsive_charge_target_cooldown_s | float(0) > 0
           and responsive_charge_target_cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
-      {{ minimum_target_delta_w | float(0) }}
+      {{ control_deadband_w | float(0) }}
     {% else %}
-      {{ command_deadband_w | float(0) }}
+      {{ control_deadband_w | float(0) }}
     {% endif %}
 
   discharge_plan: >-
@@ -615,12 +612,12 @@ variables:
           {% endif %}
           {% set trim_is_charge_absorbable = battery.can_charge
                 and battery.actual_power_fresh
-                and raw_export_w | float(0) > release_deadband_w | float(0)
-                and battery.actual_discharge | float(0) > release_deadband_w | float(0) %}
+                and raw_export_w | float(0) > control_deadband_w | float(0)
+                and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
           {% if current_allocation > 0
                 and battery.actual_power_fresh
                 and battery.target_age_s | float(0) < battery.response_grace_s | float(0)
-                and battery.actual_discharge | float(0) > current_allocation + command_deadband_w | float(0) %}
+                and battery.actual_discharge | float(0) > current_allocation + control_deadband_w | float(0) %}
             {% set pending_actual_drop = [battery.actual_discharge | float(0) - current_allocation, ns.trim_remaining] | min %}
             {% set ns.trim_remaining = [ns.trim_remaining - pending_actual_drop, 0] | max %}
             {% if not trim_is_charge_absorbable %}
@@ -661,8 +658,8 @@ variables:
           {% endif %}
           {% set trim_is_charge_absorbable = battery.can_charge
                 and battery.actual_power_fresh
-                and raw_export_w | float(0) > release_deadband_w | float(0)
-                and battery.actual_discharge | float(0) > release_deadband_w | float(0) %}
+                and raw_export_w | float(0) > control_deadband_w | float(0)
+                and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
           {% set trim_allocation = [current_allocation, ns.responsive_trim_remaining] | min %}
           {% if battery.slot == 1 %}
             {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
@@ -698,8 +695,8 @@ variables:
           {% endif %}
           {% set trim_is_charge_absorbable = battery.can_charge
                 and battery.actual_power_fresh
-                and raw_export_w | float(0) > release_deadband_w | float(0)
-                and battery.actual_discharge | float(0) > release_deadband_w | float(0) %}
+                and raw_export_w | float(0) > control_deadband_w | float(0)
+                and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
           {% set trim_allocation = [current_allocation, ns.cooldown_ready_trim_remaining] | min %}
           {% if battery.slot == 1 %}
             {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
@@ -716,7 +713,7 @@ variables:
           {% set ns.cooldown_ready_trim_remaining = [ns.cooldown_ready_trim_remaining - trim_allocation, 0] | max %}
         {% endif %}
       {% endfor %}
-      {% set ns.export_latency_brake_remaining = [raw_export_w | float(0) - release_deadband_w | float(0), 0] | max %}
+      {% set ns.export_latency_brake_remaining = [raw_export_w | float(0) - control_deadband_w | float(0), 0] | max %}
       {% for battery in responsive_discharge_trim_order %}
         {% if ns.export_latency_brake_remaining > 0
               and battery.can_charge
@@ -732,7 +729,7 @@ variables:
             {% set current_allocation = ns.t4 | float(0) %}
           {% endif %}
           {% if current_allocation > 0
-                and battery.actual_discharge | float(0) > release_deadband_w | float(0) %}
+                and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
             {% set brake_allocation = [current_allocation, ns.export_latency_brake_remaining] | min %}
             {% if battery.slot == 1 %}
               {% set ns.t1 = (current_allocation - brake_allocation) | round(0) %}
@@ -822,7 +819,7 @@ variables:
           {% set battery_discharge_target = discharge_target_4 | float(0) %}
         {% endif %}
         {% if battery.charge_locked
-              and (operating_mode == 'charge' or battery_discharge_target < command_deadband_w | float(0)) %}
+              and (operating_mode == 'charge' or battery_discharge_target < control_deadband_w | float(0)) %}
           {% set allocation = [battery.current_charge, battery.max_charge] | min %}
           {% set allocation = [allocation, 0] | max %}
           {% if battery.slot == 1 %}
@@ -849,7 +846,7 @@ variables:
           {% set battery_discharge_target = discharge_target_4 | float(0) %}
         {% endif %}
         {% if not battery.charge_locked
-              and (operating_mode == 'charge' or battery_discharge_target < command_deadband_w | float(0)) %}
+              and (operating_mode == 'charge' or battery_discharge_target < control_deadband_w | float(0)) %}
           {% set allocation = [battery.max_charge, ns.remaining] | min %}
           {% set allocation = [allocation, 0] | max %}
           {% if battery.slot == 1 %}
@@ -918,26 +915,26 @@ variables:
     {{
       (
         slot_1_current_target_w | float(0) > 0
-        and discharge_target_1 | float(0) >= command_deadband_w | float(0)
-        and discharge_target_1 | float(0) < slot_1_current_target_w | float(0) - minimum_target_delta_w | float(0)
+        and discharge_target_1 | float(0) >= control_deadband_w | float(0)
+        and discharge_target_1 | float(0) < slot_1_current_target_w | float(0) - control_deadband_w | float(0)
         and not (discharge_cooldown_ok_1 | bool)
       )
       or (
         slot_2_current_target_w | float(0) > 0
-        and discharge_target_2 | float(0) >= command_deadband_w | float(0)
-        and discharge_target_2 | float(0) < slot_2_current_target_w | float(0) - minimum_target_delta_w | float(0)
+        and discharge_target_2 | float(0) >= control_deadband_w | float(0)
+        and discharge_target_2 | float(0) < slot_2_current_target_w | float(0) - control_deadband_w | float(0)
         and not (discharge_cooldown_ok_2 | bool)
       )
       or (
         slot_3_current_target_w | float(0) > 0
-        and discharge_target_3 | float(0) >= command_deadband_w | float(0)
-        and discharge_target_3 | float(0) < slot_3_current_target_w | float(0) - minimum_target_delta_w | float(0)
+        and discharge_target_3 | float(0) >= control_deadband_w | float(0)
+        and discharge_target_3 | float(0) < slot_3_current_target_w | float(0) - control_deadband_w | float(0)
         and not (discharge_cooldown_ok_3 | bool)
       )
       or (
         slot_4_current_target_w | float(0) > 0
-        and discharge_target_4 | float(0) >= command_deadband_w | float(0)
-        and discharge_target_4 | float(0) < slot_4_current_target_w | float(0) - minimum_target_delta_w | float(0)
+        and discharge_target_4 | float(0) >= control_deadband_w | float(0)
+        and discharge_target_4 | float(0) < slot_4_current_target_w | float(0) - control_deadband_w | float(0)
         and not (discharge_cooldown_ok_4 | bool)
       )
     }}
@@ -982,7 +979,7 @@ variables:
       off_peak_no_configured_capacity
     {% elif off_peak_active | bool and off_peak_elapsed_minutes | float(0) < 15 %}
       off_peak_waiting_for_stagger
-    {% elif off_peak_active | bool and off_peak_available_charge_w | float(0) < command_deadband_w | float(0) %}
+    {% elif off_peak_active | bool and off_peak_available_charge_w | float(0) < control_deadband_w | float(0) %}
       off_peak_import_limit_reached
     {% else %}
       {{ operating_mode }}
@@ -1184,7 +1181,7 @@ actions:
           - alias: "[[trace.stop_small_delta]]"
             stop: >-
               [[message.small_delta_skipped]]
-              {{ house_power_trigger_delta_w | float(0) | round(1) }} W < {{ minimum_trigger_delta_w | float(0) | round(1) }} W.
+              {{ house_power_trigger_delta_w | float(0) | round(1) }} W < {{ control_deadband_w | float(0) | round(1) }} W.
 
       - alias: "[[trace.invalid_config_branch]]"
         conditions:
