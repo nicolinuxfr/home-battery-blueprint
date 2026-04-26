@@ -632,7 +632,8 @@ variables:
                 and raw_export_w | float(0) > control_deadband_w | float(0)
                 and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
           {% set trim_allowed = battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0)
-                or not (responsive_charge_absorber_available | bool) %}
+                or not (responsive_charge_absorber_available | bool)
+                or current_total_charge_w | float(0) >= control_deadband_w | float(0) %}
           {% if current_allocation > 0
                 and battery.actual_power_fresh
                 and battery.target_age_s | float(0) < battery.response_grace_s | float(0)
