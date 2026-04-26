@@ -18,7 +18,7 @@ Raw import URL:
 
 - `House power sensor`: the main sensor used by the allocator. The selector only shows power sensors, but Home Assistant cannot filter the unit here, so you should still pick a signed sensor in `W` with `import > 0` and `export < 0`.
 - `Active off-peak entities`: optional list of `binary_sensor`, `input_boolean`, or `schedule` entities. If at least one selected entity is `on`, the blueprint stops commanding discharge and can charge the slots enabled for off-peak periods. This field replaces the old `Blocking entities` field and intentionally breaks its old semantics.
-- `Maximum house import during off-peak charging`: global ceiling in watts. The blueprint estimates house import excluding managed battery charging and allocates only the remaining power. Set to `0 W` to disable off-peak charging.
+- `Maximum battery charge power during off-peak periods`: total battery charging ceiling in watts. The blueprint can allocate up to this power to managed batteries, independently of the current house consumption. Set to `0 W` to disable off-peak charging.
 - `Tomorrow solar forecast sensor`: energy sensor in `kWh`. A valid `0 kWh` value targets `100%`. An empty, unavailable, or non-numeric sensor prevents predictive off-peak charging from starting.
 - `Solar forecast share to reserve`: percentage of the forecast production to keep free in the batteries. With `10 kWh` of usable capacity and `50%`, an `8 kWh` forecast reserves `4 kWh` and targets about `60%`.
 
@@ -43,10 +43,10 @@ Zendure example:
 ## How It Works
 
 - The blueprint chooses one exclusive operating mode per run: `discharge`, `charge`, `off_peak_charge`, `off_peak_idle`, or `neutral`.
-- During active off-peak periods, the blueprint never commands discharge. If the solar forecast, usable capacity, or import ceiling do not allow charging, it enters `off_peak_idle` and returns managed batteries to neutral.
+- During active off-peak periods, the blueprint never commands discharge. If the solar forecast, usable capacity, or battery charge power limit do not allow charging, it enters `off_peak_idle` and returns managed batteries to neutral.
 - The off-peak charge target is computed as: `reserve_kwh = min(forecast_kwh * reserve_share / 100, total_capacity)`, then `target_soc = 100 - reserve_kwh / total_capacity * 100`.
 - Off-peak charging starts in fixed staggered steps after activation: first eligible battery at `+15 min`, second at `+30 min`, third at `+45 min`, fourth at `+60 min`. The order prioritizes lowest SoC, then shortest cooldown.
-- The house import ceiling is applied to estimated import excluding the batteries already managed by the blueprint. If the house is already using almost the whole ceiling, charging is reduced or stopped.
+- The off-peak charge power limit applies only to managed battery charging. It is not reduced by the current house consumption.
 - It now also fires a structured `home_battery_blueprint_run` event on every allowed run before any early stop or per-slot write. That event includes the trigger source, decision reason, operating mode, house power figures, computed targets, cooldown state, validation errors, and a JSON snapshot of every battery slot with current target, desired signed target, actual power, actual power age, stale actual-power state, confirmed zero-start state, and which writes or custom actions were planned.
 - House power values are accepted only when Home Assistant reports them as valid finite numbers. Non-numeric states, including `unknown`, `unavailable`, `NaN`, and infinity, are treated as an invalid sensor instead of being silently coerced to `0 W`.
 - Runs triggered by the house power sensor now ignore attribute-only updates, and they also stop early when the numeric delta stays below an internal `10 W` threshold only if that run would otherwise be a true no-op. If a small delta still implies a target write or active custom action, the blueprint continues instead of skipping this run. Off-peak entities still bypass that threshold and keep triggering immediately.

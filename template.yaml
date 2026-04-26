@@ -28,9 +28,9 @@ blueprint:
             - domain: binary_sensor
             - domain: input_boolean
             - domain: schedule
-    off_peak_import_limit_w:
-      name: "[[input.off_peak_import_limit_w.name]]"
-      description: "[[input.off_peak_import_limit_w.description]]"
+    off_peak_charge_power_limit_w:
+      name: "[[input.off_peak_charge_power_limit_w.name]]"
+      description: "[[input.off_peak_charge_power_limit_w.description]]"
       default: 0
       selector:
         number:
@@ -93,7 +93,7 @@ triggers:
 variables:
   house_power_sensor: !input house_power_sensor
   off_peak_entities: !input off_peak_entities
-  off_peak_import_limit_w: !input off_peak_import_limit_w
+  off_peak_charge_power_limit_w: !input off_peak_charge_power_limit_w
   solar_forecast_tomorrow_sensor: !input solar_forecast_tomorrow_sensor
   solar_reserve_share_pct: !input solar_reserve_share_pct
   control_deadband_w: 10
@@ -283,7 +283,7 @@ variables:
     {% endif %}
   off_peak_target_valid: >-
     {{ off_peak_active | bool
-       and off_peak_import_limit_w | float(0) > 0
+       and off_peak_charge_power_limit_w | float(0) > 0
        and solar_forecast_tomorrow_valid | bool
        and off_peak_total_capacity_kwh | float(0) > 0
        and off_peak_charge_capable_count | int(0) > 0 }}
@@ -291,8 +291,7 @@ variables:
     {% if not (off_peak_target_valid | bool) or not house_power_valid %}
       0
     {% else %}
-      {% set base_import_w = [adjusted_house_power_w | float(0), 0] | max %}
-      {{ [off_peak_import_limit_w | float(0) - base_import_w, 0] | max }}
+      {{ [off_peak_charge_power_limit_w | float(0), 0] | max }}
     {% endif %}
   off_peak_ready_to_charge: >-
     {{ off_peak_target_valid | bool
@@ -996,8 +995,8 @@ variables:
       invalid_config
     {% elif operating_mode == 'invalid_sensor' %}
       invalid_sensor
-    {% elif off_peak_active | bool and off_peak_import_limit_w | float(0) <= 0 %}
-      off_peak_disabled_by_import_limit
+    {% elif off_peak_active | bool and off_peak_charge_power_limit_w | float(0) <= 0 %}
+      off_peak_disabled_by_charge_power_limit
     {% elif off_peak_active | bool and not (solar_forecast_tomorrow_valid | bool) %}
       off_peak_invalid_solar_forecast
     {% elif off_peak_active | bool and off_peak_total_capacity_kwh | float(0) <= 0 %}
@@ -1005,7 +1004,7 @@ variables:
     {% elif off_peak_active | bool and off_peak_elapsed_minutes | float(0) < 15 %}
       off_peak_waiting_for_stagger
     {% elif off_peak_active | bool and off_peak_available_charge_w | float(0) < control_deadband_w | float(0) %}
-      off_peak_import_limit_reached
+      off_peak_charge_power_limit_reached
     {% else %}
       {{ operating_mode }}
     {% endif %}
@@ -1165,7 +1164,7 @@ actions:
       operating_mode: "{{ operating_mode }}"
       off_peak_active: "{{ off_peak_active }}"
       off_peak_elapsed_minutes: "{{ off_peak_elapsed_minutes | float(0) | round(1) }}"
-      off_peak_import_limit_w: "{{ off_peak_import_limit_w | float(0) | round(1) }}"
+      off_peak_charge_power_limit_w: "{{ off_peak_charge_power_limit_w | float(0) | round(1) }}"
       off_peak_total_capacity_kwh: "{{ off_peak_total_capacity_kwh | float(0) | round(2) }}"
       off_peak_reserved_solar_kwh: "{{ off_peak_reserved_solar_kwh | float(0) | round(2) }}"
       off_peak_target_soc_pct: "{{ off_peak_target_soc_pct | float(0) | round(1) }}"
