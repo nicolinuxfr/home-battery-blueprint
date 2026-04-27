@@ -559,7 +559,7 @@ variables:
       remaining=[(import_need_w | float(0)) - (uncommanded_actual_discharge_w | float(0)), 0] | max,
       trim_remaining=0,
       trimmed_locked_w=0,
-      chargeable_raw_export_w=raw_export_w | float(0),
+      chargeable_raw_export_w=[raw_export_w | float(0) - current_total_discharge_w | float(0), 0] | max,
       export_latency_brake_w=0,
       t1=0,
       t2=0,
