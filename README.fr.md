@@ -79,9 +79,10 @@ Exemple Zendure :
 - Les corrections dans le même sens sur une batterie déjà active respectent toujours le cooldown, sauf arrêt forcé ou réduction de décharge imposée par la protection contre l'export. Cela évite les consignes bruyantes tout en permettant à une batterie au repos de reprendre quand la maison importe réellement depuis le réseau après son cooldown.
 - Si une entité de consigne refuse une mise à jour, par exemple parce que l'intégration impose son propre délai minimal entre deux changements, l'automatisation continue maintenant et met quand même à jour les autres slots batterie.
 - La validation s'exécute maintenant avant toute écriture par batterie ou action personnalisée. Chaque commande non nulle est revérifiée contre l'état courant du capteur maison juste avant l'exécution, et les heures creuses actives forcent le mode `off_peak_charge` ou `off_peak_idle` avant toute logique de décharge.
+- Les slots batterie incomplets sont signalés dans `validation_errors` et ignorés dans l'allocation, mais ils ne bloquent plus le pilotage des slots complets.
 - Les actions optionnelles de charge et de décharge tournent uniquement quand la batterie est active dans le sens correspondant. Elles sont utiles pour les intégrations qui ont besoin d'un `select`, d'un service additionnel, ou d'une traduction helper -> API vendor.
 - Les étapes internes de l'automatisation portent maintenant des noms explicites pour que les traces Home Assistant affichent plus clairement, pendant le debug, les écritures de consigne par batterie, les hooks de charge/décharge et les arrêts de validation.
-- Si un slot activé est incomplet, l'automatisation s'arrête avec un message de validation explicite indiquant s'il manque l'entité de consigne ou si les deux puissances sont à `0 W`.
+- Si un slot activé est incomplet, l'événement de run expose une erreur de validation explicite indiquant s'il manque l'entité de consigne ou si les deux puissances sont à `0 W`.
 
 ## Limites connues
 

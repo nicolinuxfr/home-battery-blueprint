@@ -330,9 +330,7 @@ variables:
        and import_need_w < control_deadband_w }}
 
   operating_mode: >-
-    {% if validation_errors | count > 0 %}
-      invalid_config
-    {% elif not house_power_valid %}
+    {% if not house_power_valid %}
       invalid_sensor
     {% elif off_peak_ready_to_charge | bool %}
       off_peak_charge
@@ -1000,8 +998,6 @@ variables:
   run_log_reason: >-
     {% if should_stop_small_house_power_delta %}
       small_delta_skipped
-    {% elif validation_errors | count > 0 %}
-      invalid_config
     {% elif operating_mode == 'invalid_sensor' %}
       invalid_sensor
     {% elif off_peak_active | bool and off_peak_charge_power_limit_w | float(0) <= 0 %}
@@ -1215,16 +1211,6 @@ actions:
             stop: >-
               [[message.small_delta_skipped]]
               {{ house_power_trigger_delta_w | float(0) | round(1) }} W < {{ control_deadband_w | float(0) | round(1) }} W.
-
-      - alias: "[[trace.invalid_config_branch]]"
-        conditions:
-          - condition: template
-            value_template: "{{ validation_errors | count > 0 }}"
-        sequence:
-          - alias: "[[trace.stop_invalid_config]]"
-            stop: >-
-              [[message.invalid_config_prefix]]
-              {{ validation_errors | join(' | ') }}
 
       - alias: "[[trace.invalid_sensor_branch]]"
         conditions:

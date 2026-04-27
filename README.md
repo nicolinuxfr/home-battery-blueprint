@@ -79,9 +79,10 @@ Zendure example:
 - Same-direction corrections on an already active battery still obey the cooldown unless they are forced stops or export-guard discharge reductions. This avoids noisy target churn while still allowing an idle battery to resume when the house is genuinely importing from the grid after its cooldown.
 - If one target entity rejects an update, for example because the integration enforces its own minimum change delay, the automation now keeps going and still updates the other battery slots.
 - Validation now runs before any per-battery write or custom action. Every non-zero command is rechecked against the current house sensor state right before execution, and active off-peak periods force `off_peak_charge` or `off_peak_idle` before any discharge logic.
+- Incomplete battery slots are reported in `validation_errors` and ignored for allocation, but they no longer stop complete slots from being controlled.
 - Optional charge and discharge actions only run while the battery is active in the matching direction. They are useful for integrations that still need a `select`, an auxiliary service call, or a helper-to-vendor translation layer.
 - Internal automation steps now carry explicit names so Home Assistant traces show per-battery target writes, charge/discharge hooks, and validation stops more clearly during debugging.
-- If an enabled slot is incomplete, the automation stops with an explicit validation error that tells you whether the target entity is missing or both power limits are `0 W`.
+- If an enabled slot is incomplete, the run log exposes an explicit validation error that tells you whether the target entity is missing or both power limits are `0 W`.
 
 ## Known Limitations
 
