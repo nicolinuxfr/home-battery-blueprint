@@ -62,6 +62,12 @@ battery___SLOT___section:
       default: false
       selector:
         boolean: {}
+    battery___SLOT___reactive:
+      name: "[[input.battery.reactive.name]]"
+      description: "[[input.battery.reactive.description]]"
+      default: false
+      selector:
+        boolean: {}
     battery___SLOT___cooldown_seconds:
       name: "[[input.battery.cooldown_seconds.name]]"
       description: "[[input.battery.cooldown_seconds.description]]"

@@ -102,7 +102,7 @@ variables:
   solar_reserve_share_pct: !input solar_reserve_share_pct
   control_deadband_w: 10
   high_soc_headroom_threshold_pct: 90
-  responsive_trim_max_cooldown_s: 10
+
   allow_confirmed_flow_start_from_zero: true
   actual_power_stale_timeout_s: 300
   run_started_ts: "{{ as_timestamp(now()) }}"
@@ -403,7 +403,7 @@ variables:
   responsive_discharge_trim_cooldown_s: >-
     {% set ns = namespace(cooldowns=[]) %}
     {% for battery in discharge_trim_order %}
-      {% if battery.cooldown_s | float(0) > 0 %}
+      {% if battery.responsive | bool and battery.cooldown_s | float(0) > 0 %}
         {% set ns.cooldowns = ns.cooldowns + [battery.cooldown_s | float(0)] %}
       {% endif %}
     {% endfor %}
@@ -415,8 +415,8 @@ variables:
   responsive_discharge_trim_order: >-
     {% set ns = namespace(candidates=[]) %}
     {% for battery in discharge_trim_order %}
-      {% if responsive_discharge_trim_cooldown_s | float(0) > 0
-            and responsive_discharge_trim_cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0)
+      {% if battery.responsive | bool
+            and responsive_discharge_trim_cooldown_s | float(0) > 0
             and battery.cooldown_s | float(0) == responsive_discharge_trim_cooldown_s | float(0) %}
         {% set ns.candidates = ns.candidates + [battery] %}
       {% endif %}
@@ -426,8 +426,8 @@ variables:
     {% set ns = namespace(available=false) %}
     {% for battery in batteries %}
       {% if battery.can_charge
+            and battery.responsive | bool
             and battery.cooldown_s | float(0) > 0
-            and battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0)
             and battery.max_charge | float(0) > battery.current_charge | float(0) %}
         {% set ns.available = true %}
       {% endif %}
@@ -435,8 +435,7 @@ variables:
     {{ ns.available }}
   responsive_discharge_export_trim_w: >-
     {% if raw_export_w | float(0) <= 0
-          or responsive_discharge_trim_cooldown_s | float(0) <= 0
-          or responsive_discharge_trim_cooldown_s | float(0) > responsive_trim_max_cooldown_s | float(0) %}
+          or responsive_discharge_trim_cooldown_s | float(0) <= 0 %}
       0
     {% else %}
       {{ [raw_export_w | float(0), control_deadband_w | float(0)] | min }}
@@ -453,8 +452,8 @@ variables:
     {% set ns = namespace(cooldowns=[]) %}
     {% for battery in batteries %}
       {% if battery.discharge_available
-            and battery.cooldown_s | float(0) > 0
-            and battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
+            and battery.responsive | bool
+            and battery.cooldown_s | float(0) > 0 %}
         {% set ns.cooldowns = ns.cooldowns + [battery.cooldown_s | float(0)] %}
       {% endif %}
     {% endfor %}
@@ -538,8 +537,8 @@ variables:
     {% set ns = namespace(cooldowns=[]) %}
     {% for battery in batteries %}
       {% if battery.can_charge
-            and battery.cooldown_s | float(0) > 0
-            and battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
+            and battery.responsive | bool
+            and battery.cooldown_s | float(0) > 0 %}
         {% set ns.cooldowns = ns.cooldowns + [battery.cooldown_s | float(0)] %}
       {% endif %}
     {% endfor %}
@@ -549,8 +548,7 @@ variables:
       0
     {% endif %}
   opportunistic_charge_threshold_w: >-
-    {% if responsive_charge_target_cooldown_s | float(0) > 0
-          and responsive_charge_target_cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
+    {% if responsive_charge_target_cooldown_s | float(0) > 0 %}
       {{ control_deadband_w | float(0) }}
     {% else %}
       {{ control_deadband_w | float(0) }}
@@ -605,7 +603,7 @@ variables:
             {% set headroom = [battery.max_discharge - current_allocation, 0] | max %}
             {% set increase_allowed = raw_export_w | float(0) <= 0
                   or not (responsive_charge_absorber_available | bool)
-                  or battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0) %}
+                  or battery.responsive | bool %}
             {% set allocation = [headroom, ns.remaining] | min if increase_allowed else 0 %}
             {% if battery.slot == 1 %}
               {% set ns.t1 = (current_allocation + allocation) | round(0) %}
@@ -637,7 +635,7 @@ variables:
                 and battery.actual_power_fresh
                 and raw_export_w | float(0) > control_deadband_w | float(0)
                 and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
-          {% set trim_allowed = battery.cooldown_s | float(0) <= responsive_trim_max_cooldown_s | float(0)
+          {% set trim_allowed = battery.responsive | bool
                 or not (responsive_charge_absorber_available | bool)
                 or current_total_charge_w | float(0) >= control_deadband_w | float(0) %}
           {% if current_allocation > 0

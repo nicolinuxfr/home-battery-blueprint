@@ -10,7 +10,7 @@
     'soc': slot___SLOT___soc | float(0),
     'headroom_priority': slot___SLOT___soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
     'cooldown_s': battery___SLOT___cooldown_seconds | float(0),
-    'responsive': battery___SLOT___cooldown_seconds | float(0) <= responsive_trim_max_cooldown_s | float(0),
+    'responsive': battery___SLOT___reactive | bool,
     'current_target': current_target,
     'max_discharge': battery___SLOT___max_discharge_w | float(0),
     'min_discharge_soc_pct': battery___SLOT___min_discharge_soc_pct | float(0),

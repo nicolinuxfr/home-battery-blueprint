@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.4.8
+
+- Add an explicit option for responsive batteries.
+
 ## 2026.4.7
 
 - Add the ability to charge the battery during off-peak hours ;

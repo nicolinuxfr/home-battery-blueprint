@@ -1,6 +1,6 @@
 responsive_target_allowed___SLOT__: >-
-  {{ battery___SLOT___cooldown_seconds | float(0) > 0
-     and battery___SLOT___cooldown_seconds | float(0) <= responsive_trim_max_cooldown_s | float(0)
+  {{ battery___SLOT___reactive | bool
+     and battery___SLOT___cooldown_seconds | float(0) > 0
      and (
        (
          slot___SLOT___can_discharge | bool
