@@ -207,17 +207,17 @@ variables:
     }}
   uncommanded_actual_discharge_w: >-
     {{
-      (slot_1_actual_discharge_w | float(0) if slot_1_current_target_w | float(0) <= 0 and slot_1_actual_power_usable | bool else 0)
-      + (slot_2_actual_discharge_w | float(0) if slot_2_current_target_w | float(0) <= 0 and slot_2_actual_power_usable | bool else 0)
-      + (slot_3_actual_discharge_w | float(0) if slot_3_current_target_w | float(0) <= 0 and slot_3_actual_power_usable | bool else 0)
-      + (slot_4_actual_discharge_w | float(0) if slot_4_current_target_w | float(0) <= 0 and slot_4_actual_power_usable | bool else 0)
+      (slot_1_actual_discharge_w | float(0) if (not slot_1_can_discharge | bool or (slot_1_discharge_delivery_stalled | bool and slot_1_current_target_w | float(0) <= 0)) and slot_1_actual_power_usable | bool else 0)
+      + (slot_2_actual_discharge_w | float(0) if (not slot_2_can_discharge | bool or (slot_2_discharge_delivery_stalled | bool and slot_2_current_target_w | float(0) <= 0)) and slot_2_actual_power_usable | bool else 0)
+      + (slot_3_actual_discharge_w | float(0) if (not slot_3_can_discharge | bool or (slot_3_discharge_delivery_stalled | bool and slot_3_current_target_w | float(0) <= 0)) and slot_3_actual_power_usable | bool else 0)
+      + (slot_4_actual_discharge_w | float(0) if (not slot_4_can_discharge | bool or (slot_4_discharge_delivery_stalled | bool and slot_4_current_target_w | float(0) <= 0)) and slot_4_actual_power_usable | bool else 0)
     }}
   uncommanded_actual_charge_w: >-
     {{
-      (slot_1_actual_charge_w | float(0) if slot_1_current_target_w | float(0) >= 0 and slot_1_actual_power_usable | bool else 0)
-      + (slot_2_actual_charge_w | float(0) if slot_2_current_target_w | float(0) >= 0 and slot_2_actual_power_usable | bool else 0)
-      + (slot_3_actual_charge_w | float(0) if slot_3_current_target_w | float(0) >= 0 and slot_3_actual_power_usable | bool else 0)
-      + (slot_4_actual_charge_w | float(0) if slot_4_current_target_w | float(0) >= 0 and slot_4_actual_power_usable | bool else 0)
+      (slot_1_actual_charge_w | float(0) if not slot_1_can_charge | bool and slot_1_actual_power_usable | bool else 0)
+      + (slot_2_actual_charge_w | float(0) if not slot_2_can_charge | bool and slot_2_actual_power_usable | bool else 0)
+      + (slot_3_actual_charge_w | float(0) if not slot_3_can_charge | bool and slot_3_actual_power_usable | bool else 0)
+      + (slot_4_actual_charge_w | float(0) if not slot_4_can_charge | bool and slot_4_actual_power_usable | bool else 0)
     }}
   raw_export_w: "{{ [0 - house_power_w, 0] | max if house_power_valid else 0 }}"
   discharge_export_guard_w: >-
