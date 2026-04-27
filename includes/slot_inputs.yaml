@@ -88,6 +88,12 @@ battery___SLOT___section:
           filter:
             - domain: number
             - domain: input_number
+    battery___SLOT___target_power_uses_absolute_value:
+      name: "[[input.battery.target_power_uses_absolute_value.name]]"
+      description: "[[input.battery.target_power_uses_absolute_value.description]]"
+      default: false
+      selector:
+        boolean: {}
     battery___SLOT___actual_power_sensor:
       name: "[[input.battery.actual_power_sensor.name]]"
       description: "[[input.battery.actual_power_sensor.description]]"

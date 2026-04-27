@@ -21,7 +21,13 @@
             target_power_w: "{{ signed_target___SLOT__ | float(0) }}"
             target_discharge_w: "{{ discharge_target___SLOT__ | float(0) }}"
             target_charge_w: "{{ charge_target___SLOT__ | float(0) }}"
-            target_power_value: "{{ signed_target___SLOT__ | float(0) | round(0) | int(0) }}"
+            target_power_value: >-
+              {% set signed = signed_target___SLOT__ | float(0) %}
+              {% if battery___SLOT___target_power_uses_absolute_value | bool %}
+                {{ signed | abs | round(0) | int(0) }}
+              {% else %}
+                {{ signed | round(0) | int(0) }}
+              {% endif %}
         - alias: "[[slot.__SLOT__]]: [[trace.select_target_service_suffix]]"
           choose:
             - conditions:

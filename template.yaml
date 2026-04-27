@@ -332,6 +332,10 @@ variables:
       + (0 - (slot_2_current_target_w | float(0)) if slot_2_current_target_w | float(0) < 0 else 0)
       + (0 - (slot_3_current_target_w | float(0)) if slot_3_current_target_w | float(0) < 0 else 0)
       + (0 - (slot_4_current_target_w | float(0)) if slot_4_current_target_w | float(0) < 0 else 0)
+      + (slot_1_current_target_w | float(0) if off_peak_active | bool and battery_1_target_power_uses_absolute_value | bool and slot_1_current_target_w | float(0) > 0 else 0)
+      + (slot_2_current_target_w | float(0) if off_peak_active | bool and battery_2_target_power_uses_absolute_value | bool and slot_2_current_target_w | float(0) > 0 else 0)
+      + (slot_3_current_target_w | float(0) if off_peak_active | bool and battery_3_target_power_uses_absolute_value | bool and slot_3_current_target_w | float(0) > 0 else 0)
+      + (slot_4_current_target_w | float(0) if off_peak_active | bool and battery_4_target_power_uses_absolute_value | bool and slot_4_current_target_w | float(0) > 0 else 0)
     }}
   off_peak_ready_to_charge: >-
     {{ off_peak_target_valid | bool
