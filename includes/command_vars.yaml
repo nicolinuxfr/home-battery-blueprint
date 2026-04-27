@@ -106,7 +106,11 @@ should_write_target_power___SLOT__: >-
            and slot___SLOT___current_target_w | float(0) > 0
            and signed_target___SLOT__ | float(0) < slot___SLOT___current_target_w | float(0)) }}
   {% elif signed_target___SLOT__ | float(0) < 0 %}
-    {{ charge_cooldown_ok___SLOT__ }}
+    {{ charge_cooldown_ok___SLOT__
+       or (
+         operating_mode == 'off_peak_charge'
+         and current_target_sign_for_control___SLOT__ | int(0) == 0
+       ) }}
   {% else %}
     false
   {% endif %}
