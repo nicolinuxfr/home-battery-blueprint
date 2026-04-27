@@ -1,16 +1,21 @@
 {% if slot___SLOT___used %}
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
-  {% set commanded_discharge = [current_target, 0] | max %}
-  {% set commanded_discharge = [commanded_discharge, battery___SLOT___max_discharge_w | float(0)] | min %}
   {% if battery___SLOT___target_power_uses_absolute_value | bool and off_peak_active | bool %}
+    {% set commanded_discharge = 0 %}
     {% set commanded_charge = [current_target, 0] | max %}
+    {% set reserved_discharge = 0 %}
+    {% set reserved_charge = [current_target, 0] | max %}
   {% else %}
+    {% set commanded_discharge = [current_target, 0] | max %}
     {% set commanded_charge = [0 - current_target, 0] | max %}
+    {% set reserved_balance_power = slot___SLOT___reserved_balance_power | float(0) %}
+    {% set reserved_discharge = [reserved_balance_power, 0] | max %}
+    {% set reserved_charge = [0 - reserved_balance_power, 0] | max %}
   {% endif %}
+  {% set commanded_discharge = [commanded_discharge, battery___SLOT___max_discharge_w | float(0)] | min %}
   {% set commanded_charge = [commanded_charge, battery___SLOT___max_charge_w | float(0)] | min %}
-  {% set reserved_balance_power = slot___SLOT___reserved_balance_power | float(0) %}
-  {% set reserved_discharge = [reserved_balance_power, 0] | max %}
-  {% set reserved_charge = [0 - reserved_balance_power, 0] | max %}
+  {% set reserved_discharge = [reserved_discharge, battery___SLOT___max_discharge_w | float(0)] | min %}
+  {% set reserved_charge = [reserved_charge, battery___SLOT___max_charge_w | float(0)] | min %}
   {% set ns.items = ns.items + [{
     'slot': __SLOT__,
     'soc': slot___SLOT___soc | float(0),
@@ -38,7 +43,7 @@
     'target_age_s': slot___SLOT___target_age_s | float(0),
     'response_grace_s': slot___SLOT___response_grace_s | float(0),
     'discharge_delivery_stalled': slot___SLOT___discharge_delivery_stalled | bool,
-    'discharge_locked': slot___SLOT___can_discharge and not (slot___SLOT___discharge_delivery_stalled | bool) and current_target > 0 and not (discharge_cooldown_ok___SLOT__ | bool),
+    'discharge_locked': slot___SLOT___can_discharge and not (battery___SLOT___target_power_uses_absolute_value | bool and off_peak_active | bool) and not (slot___SLOT___discharge_delivery_stalled | bool) and current_target > 0 and not (discharge_cooldown_ok___SLOT__ | bool),
     'charge_locked': slot___SLOT___can_charge and (current_target < 0 or (battery___SLOT___target_power_uses_absolute_value | bool and off_peak_active | bool and current_target > 0)) and not (charge_cooldown_ok___SLOT__ | bool)
   }] %}
 {% endif %}

@@ -32,23 +32,40 @@ desired_target_sign___SLOT__: >-
   {% else %}
     0
   {% endif %}
-current_target_rounded___SLOT__: "{{ slot___SLOT___current_target_w | float(0) | round(0) | int(0) }}"
+current_target_for_control___SLOT__: >-
+  {% set current = slot___SLOT___current_target_w | float(0) %}
+  {% if battery___SLOT___target_power_uses_absolute_value | bool
+        and desired_target_sign___SLOT__ | int(0) == -1
+        and current > 0 %}
+    {{ 0 - current }}
+  {% else %}
+    {{ current }}
+  {% endif %}
+current_target_sign_for_control___SLOT__: >-
+  {% if current_target_for_control___SLOT__ | float(0) > 0 %}
+    1
+  {% elif current_target_for_control___SLOT__ | float(0) < 0 %}
+    -1
+  {% else %}
+    0
+  {% endif %}
+current_target_rounded___SLOT__: "{{ current_target_for_control___SLOT__ | float(0) | round(0) | int(0) }}"
 desired_target_rounded___SLOT__: "{{ signed_target___SLOT__ | float(0) | round(0) | int(0) }}"
 target_value_changed___SLOT__: "{{ desired_target_rounded___SLOT__ | int(0) != current_target_rounded___SLOT__ | int(0) }}"
 same_direction_target_delta_w___SLOT__: "{{ (desired_target_rounded___SLOT__ | int(0) - current_target_rounded___SLOT__ | int(0)) | abs }}"
 same_direction_small_adjustment___SLOT__: >-
   {{ target_value_changed___SLOT__ | bool
      and desired_target_sign___SLOT__ | int(0) != 0
-     and desired_target_sign___SLOT__ | int(0) == slot___SLOT___current_target_sign | int(0)
+     and desired_target_sign___SLOT__ | int(0) == current_target_sign_for_control___SLOT__ | int(0)
      and same_direction_target_delta_w___SLOT__ | float(0) < control_deadband_w | float(0) }}
 direction_change_blocked_by_cooldown___SLOT__: >-
   {{ desired_target_sign___SLOT__ | int(0) != 0
-     and slot___SLOT___current_target_sign | int(0) != 0
-     and desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0)
+     and current_target_sign_for_control___SLOT__ | int(0) != 0
+     and desired_target_sign___SLOT__ | int(0) != current_target_sign_for_control___SLOT__ | int(0)
      and not (triggered_by_off_peak_entity | bool)
      and slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) }}
 start_from_zero_flow_confirmed___SLOT__: >-
-  {{ slot___SLOT___current_target_sign | int(0) == 0
+  {{ current_target_sign_for_control___SLOT__ | int(0) == 0
      and allow_confirmed_flow_start_from_zero | bool
      and (
        (desired_target_sign___SLOT__ | int(0) == 1
@@ -69,11 +86,11 @@ should_write_target_power___SLOT__: >-
   {% if not slot___SLOT___target_entity_configured %}
     false
   {% elif desired_target_sign___SLOT__ | int(0) == 0 %}
-    {{ slot___SLOT___current_target_sign | int(0) != 0 }}
+    {{ current_target_sign_for_control___SLOT__ | int(0) != 0 }}
   {% elif direction_change_blocked_by_cooldown___SLOT__ | bool %}
     false
-  {% elif desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0)
-        and slot___SLOT___current_target_sign | int(0) != 0 %}
+  {% elif desired_target_sign___SLOT__ | int(0) != current_target_sign_for_control___SLOT__ | int(0)
+        and current_target_sign_for_control___SLOT__ | int(0) != 0 %}
     true
   {% elif not (target_value_changed___SLOT__ | bool) %}
     false
@@ -100,7 +117,7 @@ should_run_discharge_actions___SLOT__: >-
     false
   {% elif signed_target___SLOT__ | float(0) <= 0 %}
     {{ (
-         slot___SLOT___current_target_sign | int(0) == 1
+         current_target_sign_for_control___SLOT__ | int(0) == 1
          and target_value_changed___SLOT__ | bool
        ) or (
          slot___SLOT___actual_power_usable | bool
@@ -109,10 +126,10 @@ should_run_discharge_actions___SLOT__: >-
        ) }}
   {% elif discharge_increase_blocked_by_locked_reduction___SLOT__ | bool %}
     false
-  {% elif slot___SLOT___current_target_sign | int(0) != 1 %}
+  {% elif current_target_sign_for_control___SLOT__ | int(0) != 1 %}
     {{ start_from_zero_flow_confirmed___SLOT__ | bool
        or (responsive_target_allowed___SLOT__ | bool and signed_target___SLOT__ | float(0) > 0)
-       or slot___SLOT___current_target_sign | int(0) != 0 }}
+       or current_target_sign_for_control___SLOT__ | int(0) != 0 }}
   {% elif not (target_value_changed___SLOT__ | bool) %}
     false
   {% elif same_direction_small_adjustment___SLOT__ | bool %}
@@ -130,18 +147,18 @@ should_run_charge_actions___SLOT__: >-
     false
   {% elif signed_target___SLOT__ | float(0) >= 0 %}
     {{ (
-         slot___SLOT___current_target_sign | int(0) == -1
+         current_target_sign_for_control___SLOT__ | int(0) == -1
          and target_value_changed___SLOT__ | bool
        ) or (
          slot___SLOT___actual_power_usable | bool
          and slot___SLOT___actual_charge_w | float(0) > control_deadband_w | float(0)
          and charge_cooldown_ok___SLOT__ | bool
        ) }}
-  {% elif slot___SLOT___current_target_sign | int(0) != -1 %}
+  {% elif current_target_sign_for_control___SLOT__ | int(0) != -1 %}
     {{ start_from_zero_flow_confirmed___SLOT__ | bool
        or (operating_mode == 'off_peak_charge' and charge_cooldown_ok___SLOT__ | bool)
        or (responsive_target_allowed___SLOT__ | bool and signed_target___SLOT__ | float(0) < 0)
-       or slot___SLOT___current_target_sign | int(0) != 0 }}
+       or current_target_sign_for_control___SLOT__ | int(0) != 0 }}
   {% elif not (target_value_changed___SLOT__ | bool) %}
     false
   {% elif same_direction_small_adjustment___SLOT__ | bool %}
