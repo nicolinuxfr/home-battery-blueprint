@@ -5,10 +5,7 @@
         - condition: template
           value_template: "{{ should_write_target_power___SLOT__ }}"
         - condition: template
-          value_template: >-
-            {% set sensor_state = states(house_power_sensor) %}
-            {% set sensor_valid = sensor_state not in ['unknown', 'unavailable', 'none', ''] %}
-            {{ sensor_valid }}
+          value_template: "{{ house_power_valid }}"
       sequence:
         - alias: "[[slot.__SLOT__]]: [[trace.prepare_target_context_suffix]]"
           variables:
@@ -82,9 +79,7 @@
         - condition: template
           value_template: "{{ should_run_discharge_actions___SLOT__ }}"
         - condition: template
-          value_template: >-
-            {% set sensor_state = states(house_power_sensor) %}
-            {{ sensor_state not in ['unknown', 'unavailable', 'none', ''] }}
+          value_template: "{{ house_power_valid }}"
       sequence:
         - alias: "[[slot.__SLOT__]]: [[trace.prepare_discharge_context_suffix]]"
           variables:
@@ -110,9 +105,7 @@
         - condition: template
           value_template: "{{ should_run_charge_actions___SLOT__ }}"
         - condition: template
-          value_template: >-
-            {% set sensor_state = states(house_power_sensor) %}
-            {{ sensor_state not in ['unknown', 'unavailable', 'none', ''] }}
+          value_template: "{{ house_power_valid }}"
       sequence:
         - alias: "[[slot.__SLOT__]]: [[trace.prepare_charge_context_suffix]]"
           variables:
