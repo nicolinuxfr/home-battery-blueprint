@@ -386,7 +386,7 @@ variables:
       {% endif %}
     {% endfor %}
     {{ (ns.headroom | sort(attribute='cooldown_s') | sort(attribute='soc', reverse=true))
-       + ((ns.regular | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s')) }}
+       + ((ns.regular | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true)) }}
   discharge_trim_order: >-
     {% set ns = namespace(regular=[], headroom=[]) %}
     {% for battery in batteries %}
@@ -1021,6 +1021,7 @@ variables:
         'headroom_priority': slot_1_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_1_cooldown_seconds | float(0),
         'max_discharge_w': battery_1_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_1_min_discharge_soc_pct | float(0),
         'max_charge_w': battery_1_max_charge_w | float(0),
         'usable_capacity_kwh': battery_1_usable_capacity_kwh | float(0),
         'off_peak_charge_enabled': battery_1_off_peak_charge_enabled | bool,
@@ -1056,6 +1057,7 @@ variables:
         'headroom_priority': slot_2_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_2_cooldown_seconds | float(0),
         'max_discharge_w': battery_2_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_2_min_discharge_soc_pct | float(0),
         'max_charge_w': battery_2_max_charge_w | float(0),
         'usable_capacity_kwh': battery_2_usable_capacity_kwh | float(0),
         'off_peak_charge_enabled': battery_2_off_peak_charge_enabled | bool,
@@ -1091,6 +1093,7 @@ variables:
         'headroom_priority': slot_3_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_3_cooldown_seconds | float(0),
         'max_discharge_w': battery_3_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_3_min_discharge_soc_pct | float(0),
         'max_charge_w': battery_3_max_charge_w | float(0),
         'usable_capacity_kwh': battery_3_usable_capacity_kwh | float(0),
         'off_peak_charge_enabled': battery_3_off_peak_charge_enabled | bool,
@@ -1126,6 +1129,7 @@ variables:
         'headroom_priority': slot_4_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
         'cooldown_s': battery_4_cooldown_seconds | float(0),
         'max_discharge_w': battery_4_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_4_min_discharge_soc_pct | float(0),
         'max_charge_w': battery_4_max_charge_w | float(0),
         'usable_capacity_kwh': battery_4_usable_capacity_kwh | float(0),
         'off_peak_charge_enabled': battery_4_off_peak_charge_enabled | bool,

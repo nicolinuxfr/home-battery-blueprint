@@ -127,7 +127,11 @@ slot___SLOT___discharge_delivery_stalled: >-
     false
   {% endif %}
 slot___SLOT___charge_delivery_stalled: "false"
-slot___SLOT___can_discharge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_discharge_w | float(0) > 0 }}"
+slot___SLOT___can_discharge: >-
+  {{ slot___SLOT___used
+     and slot___SLOT___target_entity_configured
+     and battery___SLOT___max_discharge_w | float(0) > 0
+     and slot___SLOT___soc | float(0) >= battery___SLOT___min_discharge_soc_pct | float(0) }}
 slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 }}"
 slot___SLOT___can_off_peak_charge: >-
   {{ slot___SLOT___can_charge | bool

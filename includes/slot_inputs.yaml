@@ -23,6 +23,17 @@ battery___SLOT___section:
           step: 10
           unit_of_measurement: W
           mode: box
+    battery___SLOT___min_discharge_soc_pct:
+      name: "[[input.battery.min_discharge_soc_pct.name]]"
+      description: "[[input.battery.min_discharge_soc_pct.description]]"
+      default: 15
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
     battery___SLOT___max_charge_w:
       name: "[[input.battery.max_charge_w.name]]"
       description: "[[input.battery.max_charge_w.description]]"

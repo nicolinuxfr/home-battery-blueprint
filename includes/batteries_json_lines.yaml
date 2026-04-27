@@ -13,6 +13,7 @@
     'responsive': battery___SLOT___cooldown_seconds | float(0) <= responsive_trim_max_cooldown_s | float(0),
     'current_target': current_target,
     'max_discharge': battery___SLOT___max_discharge_w | float(0),
+    'min_discharge_soc_pct': battery___SLOT___min_discharge_soc_pct | float(0),
     'max_charge': battery___SLOT___max_charge_w | float(0),
     'usable_capacity_kwh': battery___SLOT___usable_capacity_kwh | float(0),
     'can_discharge': slot___SLOT___can_discharge | bool,

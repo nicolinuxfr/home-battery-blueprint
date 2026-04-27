@@ -44,6 +44,8 @@
   "input.battery.soc_sensor.description": "Laisse ce champ vide pour ignorer ce slot. Sinon, ce sélecteur n'affiche que les capteurs de batterie qui remontent un pourcentage de charge, et le capteur choisi active le slot. Un slot activé doit aussi exposer une entité numérique de consigne et au moins une limite de puissance non nulle.",
   "input.battery.max_discharge_w.name": "Puissance maximale de décharge",
   "input.battery.max_discharge_w.description": "Limite de décharge saisie manuellement et utilisée par l'algorithme d'allocation pour cette batterie.",
+  "input.battery.min_discharge_soc_pct.name": "État de charge minimum pour décharger",
+  "input.battery.min_discharge_soc_pct.description": "État de charge minimum requis pour attribuer de la puissance de décharge à cette batterie. Si la batterie passe sous ce seuil, le blueprint l'exclut de l'allocation de décharge et écrit 0 si elle garde encore une consigne de décharge active.",
   "input.battery.max_charge_w.name": "Puissance maximale de charge",
   "input.battery.max_charge_w.description": "Limite de charge saisie manuellement et utilisée pour la charge opportuniste et la charge heures creuses. Les batteries capables de charger peuvent absorber l'export réel résiduel une fois les consignes de décharge réduites, ou charger depuis le réseau pendant les heures creuses si ce slot l'autorise. Mets 0 si cette batterie ne doit jamais être chargée par le blueprint.",
   "input.battery.usable_capacity_kwh.name": "Capacité utile",

@@ -44,6 +44,8 @@
   "input.battery.soc_sensor.description": "Leave empty to ignore this battery slot. Otherwise, this selector only shows battery sensors that report a charge percentage, and the chosen sensor enables the slot. An enabled slot must also expose a numeric target entity and at least one non-zero power limit.",
   "input.battery.max_discharge_w.name": "Maximum discharge power",
   "input.battery.max_discharge_w.description": "Manual discharge limit used by the allocator for this battery.",
+  "input.battery.min_discharge_soc_pct.name": "Minimum state of charge for discharge",
+  "input.battery.min_discharge_soc_pct.description": "Minimum state of charge required before this battery can be assigned discharge power. If the battery is below this threshold, the blueprint removes it from discharge allocation and writes 0 if it still has an active discharge target.",
   "input.battery.max_charge_w.name": "Maximum charge power",
   "input.battery.max_charge_w.description": "Manual charge limit used by the allocator for opportunistic charging and off-peak charging. Charge-capable batteries can absorb residual real export once discharge targets have been trimmed down, or charge from the grid during off-peak periods when this slot allows it. Set to 0 if this battery must never be charged by the blueprint.",
   "input.battery.usable_capacity_kwh.name": "Usable capacity",
