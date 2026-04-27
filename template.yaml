@@ -877,7 +877,11 @@ variables:
         {% if ns.remaining > 0
               and not battery.charge_locked
               and (not battery.discharge_locked or battery.responsive)
-              and (operating_mode == 'charge' or battery_discharge_target < control_deadband_w | float(0)) %}
+              and (operating_mode == 'charge'
+                   or (
+                     battery_discharge_target < control_deadband_w | float(0)
+                     and battery.current_discharge | float(0) < control_deadband_w | float(0)
+                   )) %}
           {% set allocation = [battery.max_charge, ns.remaining] | min %}
           {% set allocation = [allocation, 0] | max %}
           {% if battery.slot == 1 %}

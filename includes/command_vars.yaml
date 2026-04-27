@@ -51,10 +51,6 @@ start_from_zero_flow_confirmed___SLOT__: >-
   {{ slot___SLOT___current_target_sign | int(0) == 0
      and allow_confirmed_flow_start_from_zero | bool
      and (
-       responsive_target_allowed___SLOT__ | bool
-       or slot___SLOT___cooldown_elapsed | bool
-     )
-     and (
        (desired_target_sign___SLOT__ | int(0) == 1
         and house_power_valid
         and house_power_w | float(0) >= control_deadband_w | float(0))
