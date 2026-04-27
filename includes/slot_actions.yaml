@@ -21,10 +21,10 @@
             off_peak_target_soc_pct: "{{ off_peak_target_soc_pct }}"
             solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh }}"
             solar_reserve_share_pct: "{{ solar_reserve_share_pct }}"
-            target_power_w: "{{ signed_target___SLOT__ }}"
-            target_discharge_w: "{{ discharge_target___SLOT__ }}"
-            target_charge_w: "{{ charge_target___SLOT__ }}"
-            target_power_value: "{{ target_power_w | round(0) | int(0) }}"
+            target_power_w: "{{ signed_target___SLOT__ | float(0) }}"
+            target_discharge_w: "{{ discharge_target___SLOT__ | float(0) }}"
+            target_charge_w: "{{ charge_target___SLOT__ | float(0) }}"
+            target_power_value: "{{ signed_target___SLOT__ | float(0) | round(0) | int(0) }}"
         - alias: "[[slot.__SLOT__]]: [[trace.select_target_service_suffix]]"
           choose:
             - conditions:
@@ -97,9 +97,9 @@
             off_peak_target_soc_pct: "{{ off_peak_target_soc_pct }}"
             solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh }}"
             solar_reserve_share_pct: "{{ solar_reserve_share_pct }}"
-            target_power_w: "{{ signed_target___SLOT__ }}"
-            target_discharge_w: "{{ discharge_target___SLOT__ }}"
-            target_charge_w: "{{ charge_target___SLOT__ }}"
+            target_power_w: "{{ signed_target___SLOT__ | float(0) }}"
+            target_discharge_w: "{{ discharge_target___SLOT__ | float(0) }}"
+            target_charge_w: "{{ charge_target___SLOT__ | float(0) }}"
         - alias: "[[slot.__SLOT__]]: [[trace.execute_discharge_actions_suffix]]"
           choose: []
           default: !input battery___SLOT___discharge_actions
@@ -125,9 +125,9 @@
             off_peak_target_soc_pct: "{{ off_peak_target_soc_pct }}"
             solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh }}"
             solar_reserve_share_pct: "{{ solar_reserve_share_pct }}"
-            target_power_w: "{{ signed_target___SLOT__ }}"
-            target_discharge_w: "{{ discharge_target___SLOT__ }}"
-            target_charge_w: "{{ charge_target___SLOT__ }}"
+            target_power_w: "{{ signed_target___SLOT__ | float(0) }}"
+            target_discharge_w: "{{ discharge_target___SLOT__ | float(0) }}"
+            target_charge_w: "{{ charge_target___SLOT__ | float(0) }}"
         - alias: "[[slot.__SLOT__]]: [[trace.execute_charge_actions_suffix]]"
           choose: []
           default: !input battery___SLOT___charge_actions

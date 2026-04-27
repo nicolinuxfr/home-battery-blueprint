@@ -106,6 +106,11 @@ variables:
   allow_confirmed_flow_start_from_zero: true
   actual_power_stale_timeout_s: 300
   run_started_ts: "{{ as_timestamp(now()) }}"
+  battery_slot: 0
+  battery_soc: 0
+  target_power_w: 0
+  target_discharge_w: 0
+  target_charge_w: 0
 
   [[generated.slot_bindings]]
 
