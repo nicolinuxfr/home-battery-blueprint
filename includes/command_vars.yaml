@@ -46,8 +46,7 @@ direction_change_blocked_by_cooldown___SLOT__: >-
      and slot___SLOT___current_target_sign | int(0) != 0
      and desired_target_sign___SLOT__ | int(0) != slot___SLOT___current_target_sign | int(0)
      and not (triggered_by_off_peak_entity | bool)
-     and not (responsive_target_allowed___SLOT__ | bool)
-     and not (slot___SLOT___cooldown_elapsed | bool) }}
+     and slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) }}
 start_from_zero_flow_confirmed___SLOT__: >-
   {{ slot___SLOT___current_target_sign | int(0) == 0
      and allow_confirmed_flow_start_from_zero | bool
