@@ -128,6 +128,17 @@ variables:
     {% else %}
       false
     {% endif %}
+  off_peak_trigger_briefly_reactivated: >-
+    {% if triggered_by_off_peak_entity
+          and trigger is defined
+          and trigger.from_state is not none
+          and trigger.to_state is not none
+          and trigger.from_state.state != 'on'
+          and trigger.to_state.state == 'on' %}
+      {{ (run_started_ts | float(0)) - as_timestamp(trigger.from_state.last_changed, 0) <= 120 }}
+    {% else %}
+      false
+    {% endif %}
   trigger_from_house_power_w: >-
     {% if triggered_by_house_power_sensor and trigger is defined and trigger.from_state is not none %}
       {% set value = trigger.from_state.state %}
@@ -182,17 +193,13 @@ variables:
       true
     {% else %}
       {% set was_charging =
-        (slot_1_current_target_w | float(0) < 0)
-        or (slot_2_current_target_w | float(0) < 0)
-        or (slot_3_current_target_w | float(0) < 0)
-        or (slot_4_current_target_w | float(0) < 0)
+        (slot_1_current_target_w | default(0) | float(0) < 0)
+        or (slot_2_current_target_w | default(0) | float(0) < 0)
+        or (slot_3_current_target_w | default(0) | float(0) < 0)
+        or (slot_4_current_target_w | default(0) | float(0) < 0)
       %}
-      {% set changed_recently = entities | selectattr('last_changed', 'defined')
-         | map(attribute='last_changed')
-         | map('as_timestamp')
-         | select('>=', run_started_ts | float(0) - 120)
-         | list | count > 0 %}
-      {{ was_charging and changed_recently }}
+      {% set last_change = entities | map(attribute='last_changed') | map('as_timestamp') | list | sort | last if entities | count > 0 else 0 %}
+      {{ was_charging and (run_started_ts | float(0) - last_change < 120) }}
     {% endif %}
   off_peak_started_ts: >-
     {% set ns = namespace(started=0) %}
@@ -329,7 +336,11 @@ variables:
   off_peak_ready_to_charge: >-
     {{ off_peak_target_valid | bool
        and off_peak_available_charge_w | float(0) >= control_deadband_w | float(0)
-       and (off_peak_elapsed_minutes | float(0) >= 15 or current_total_charge_w | float(0) >= control_deadband_w | float(0)) }}
+       and (
+         off_peak_elapsed_minutes | float(0) >= 15
+         or current_total_charge_w | float(0) >= control_deadband_w | float(0)
+         or off_peak_trigger_briefly_reactivated | bool
+       ) }}
   current_total_discharge_w: >-
     {{
       (slot_1_current_target_w | float(0) if slot_1_current_target_w | float(0) > 0 else 0)
@@ -525,10 +536,10 @@ variables:
       {% endif %}
     {% endfor %}
     {{ ns.rank }}
-  off_peak_stagger_ready_1: "{{ off_peak_rank_1 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_1 | int(0) * 15 or slot_1_current_target_w | float(0) < 0) }}"
-  off_peak_stagger_ready_2: "{{ off_peak_rank_2 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_2 | int(0) * 15 or slot_2_current_target_w | float(0) < 0) }}"
-  off_peak_stagger_ready_3: "{{ off_peak_rank_3 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_3 | int(0) * 15 or slot_3_current_target_w | float(0) < 0) }}"
-  off_peak_stagger_ready_4: "{{ off_peak_rank_4 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_4 | int(0) * 15 or slot_4_current_target_w | float(0) < 0) }}"
+  off_peak_stagger_ready_1: "{{ off_peak_rank_1 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_1 | int(0) * 15 or slot_1_current_target_w | float(0) < 0 or off_peak_trigger_briefly_reactivated | bool) }}"
+  off_peak_stagger_ready_2: "{{ off_peak_rank_2 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_2 | int(0) * 15 or slot_2_current_target_w | float(0) < 0 or off_peak_trigger_briefly_reactivated | bool) }}"
+  off_peak_stagger_ready_3: "{{ off_peak_rank_3 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_3 | int(0) * 15 or slot_3_current_target_w | float(0) < 0 or off_peak_trigger_briefly_reactivated | bool) }}"
+  off_peak_stagger_ready_4: "{{ off_peak_rank_4 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_4 | int(0) * 15 or slot_4_current_target_w | float(0) < 0 or off_peak_trigger_briefly_reactivated | bool) }}"
   charge_order: >-
     {% set ns = namespace(regular=[], headroom=[]) %}
     {% for battery in batteries %}
@@ -814,7 +825,7 @@ variables:
     {% if operating_mode == 'off_peak_charge' %}
       {% set ns.remaining = [(off_peak_available_charge_w | float(0)) - (uncommanded_actual_charge_w | float(0)), 0] | max %}
       {% for battery in off_peak_charge_order %}
-        {% set stagger_ready = off_peak_elapsed_minutes | float(0) >= loop.index * 15 or battery.commanded_charge | float(0) > 0 %}
+        {% set stagger_ready = off_peak_elapsed_minutes | float(0) >= loop.index * 15 or battery.commanded_charge | float(0) > 0 or off_peak_trigger_briefly_reactivated | bool %}
         {% if stagger_ready and battery.charge_locked %}
           {% set allocation = [battery.current_charge, battery.max_charge] | min %}
           {% set allocation = [allocation, 0] | max %}
@@ -831,7 +842,7 @@ variables:
         {% endif %}
       {% endfor %}
       {% for battery in off_peak_charge_order %}
-        {% set stagger_ready = off_peak_elapsed_minutes | float(0) >= loop.index * 15 or battery.commanded_charge | float(0) > 0 %}
+        {% set stagger_ready = off_peak_elapsed_minutes | float(0) >= loop.index * 15 or battery.commanded_charge | float(0) > 0 or off_peak_trigger_briefly_reactivated | bool %}
         {% if ns.remaining > 0
               and stagger_ready
               and not battery.charge_locked

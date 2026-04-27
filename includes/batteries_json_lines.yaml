@@ -2,6 +2,8 @@
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% set commanded_discharge = [current_target, 0] | max %}
   {% set commanded_discharge = [commanded_discharge, battery___SLOT___max_discharge_w | float(0)] | min %}
+  {% set commanded_charge = [0 - current_target, 0] | max %}
+  {% set commanded_charge = [commanded_charge, battery___SLOT___max_charge_w | float(0)] | min %}
   {% set reserved_balance_power = slot___SLOT___reserved_balance_power | float(0) %}
   {% set reserved_discharge = [reserved_balance_power, 0] | max %}
   {% set reserved_charge = [0 - reserved_balance_power, 0] | max %}
@@ -22,6 +24,7 @@
     'off_peak_charge_enabled': battery___SLOT___off_peak_charge_enabled | bool,
     'can_off_peak_charge': slot___SLOT___can_off_peak_charge | bool,
     'commanded_discharge': commanded_discharge,
+    'commanded_charge': commanded_charge,
     'current_discharge': reserved_discharge,
     'current_charge': reserved_charge,
     'actual_power_fresh': slot___SLOT___actual_power_fresh | bool,
