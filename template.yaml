@@ -28,38 +28,6 @@ blueprint:
             - domain: binary_sensor
             - domain: input_boolean
             - domain: schedule
-    off_peak_charge_power_limit_w:
-      name: "[[input.off_peak_charge_power_limit_w.name]]"
-      description: "[[input.off_peak_charge_power_limit_w.description]]"
-      default: 0
-      selector:
-        number:
-          min: 0
-          max: 20000
-          step: 50
-          unit_of_measurement: W
-          mode: box
-    solar_forecast_tomorrow_sensor:
-      name: "[[input.solar_forecast_tomorrow_sensor.name]]"
-      description: "[[input.solar_forecast_tomorrow_sensor.description]]"
-      default: ""
-      selector:
-        entity:
-          filter:
-            - domain: sensor
-              device_class: energy
-    solar_reserve_share_pct:
-      name: "[[input.solar_reserve_share_pct.name]]"
-      description: "[[input.solar_reserve_share_pct.description]]"
-      default: 50
-      selector:
-        number:
-          min: 0
-          max: 100
-          step: 5
-          unit_of_measurement: "%"
-          mode: slider
-
     # Each battery slot is driven through a signed numeric target entity.
     # Optional active-mode actions can translate that target to vendor-specific controls.
     # Generated SoC selectors are limited to battery percentage sensors.
@@ -77,29 +45,15 @@ triggers:
     not_to: null
   - trigger: state
     entity_id: !input off_peak_entities
+    to: "on"
+    for: "00:00:15"
   - trigger: state
     entity_id: !input off_peak_entities
-    to: "on"
-    for: "00:15:00"
-  - trigger: state
-    entity_id: !input off_peak_entities
-    to: "on"
-    for: "00:30:00"
-  - trigger: state
-    entity_id: !input off_peak_entities
-    to: "on"
-    for: "00:45:00"
-  - trigger: state
-    entity_id: !input off_peak_entities
-    to: "on"
-    for: "01:00:00"
+    from: "on"
 
 variables:
   house_power_sensor: !input house_power_sensor
   off_peak_entities: !input off_peak_entities
-  off_peak_charge_power_limit_w: !input off_peak_charge_power_limit_w
-  solar_forecast_tomorrow_sensor: !input solar_forecast_tomorrow_sensor
-  solar_reserve_share_pct: !input solar_reserve_share_pct
   control_deadband_w: 10
   high_soc_headroom_threshold_pct: 90
 
@@ -122,20 +76,12 @@ variables:
     {% endif %}
   triggered_by_off_peak_entity: "{{ trigger_entity_id in off_peak_entities }}"
   triggered_by_house_power_sensor: "{{ trigger_entity_id == house_power_sensor }}"
+  triggered_by_start_or_reload: >-
+    {{ trigger is defined
+       and trigger.platform in ['homeassistant', 'event'] }}
   off_peak_trigger_entered_active: >-
     {% if triggered_by_off_peak_entity and trigger is defined and trigger.to_state is not none %}
       {{ trigger.to_state.state == 'on' }}
-    {% else %}
-      false
-    {% endif %}
-  off_peak_trigger_briefly_reactivated: >-
-    {% if triggered_by_off_peak_entity
-          and trigger is defined
-          and trigger.from_state is not none
-          and trigger.to_state is not none
-          and trigger.from_state.state != 'on'
-          and trigger.to_state.state == 'on' %}
-      {{ (run_started_ts | float(0)) - as_timestamp(trigger.from_state.last_changed, 0) <= 120 }}
     {% else %}
       false
     {% endif %}
@@ -188,36 +134,7 @@ variables:
 
   off_peak_active: >-
     {% set entities = expand(off_peak_entities) %}
-    {% set is_on = entities | selectattr('state', 'eq', 'on') | list | count > 0 %}
-    {% if is_on %}
-      true
-    {% else %}
-      {% set was_charging =
-        (slot_1_current_target_w | default(0) | float(0) < 0)
-        or (slot_2_current_target_w | default(0) | float(0) < 0)
-        or (slot_3_current_target_w | default(0) | float(0) < 0)
-        or (slot_4_current_target_w | default(0) | float(0) < 0)
-      %}
-      {% set last_change = entities | map(attribute='last_changed') | map('as_timestamp') | list | sort | last if entities | count > 0 else 0 %}
-      {{ was_charging and (run_started_ts | float(0) - last_change < 120) }}
-    {% endif %}
-  off_peak_started_ts: >-
-    {% set ns = namespace(started=0) %}
-    {% for entity in expand(off_peak_entities) %}
-      {% if entity.state == 'on' %}
-        {% set ts = as_timestamp(entity.last_changed, 0) %}
-        {% if ns.started == 0 or ts < ns.started %}
-          {% set ns.started = ts %}
-        {% endif %}
-      {% endif %}
-    {% endfor %}
-    {{ ns.started }}
-  off_peak_elapsed_minutes: >-
-    {% if off_peak_active | bool and off_peak_started_ts | float(0) > 0 %}
-      {{ ((run_started_ts | float(0)) - (off_peak_started_ts | float(0))) / 60 }}
-    {% else %}
-      0
-    {% endif %}
+    {{ entities | selectattr('state', 'eq', 'on') | list | count > 0 }}
 
   # Rebuild the underlying house demand from the net house meter plus the
   # managed battery contribution. Long-cooldown batteries keep stable active
@@ -261,22 +178,6 @@ variables:
     {% endif %}
   import_need_w: "{{ [adjusted_house_power_w, 0] | max if house_power_valid else 0 }}"
   export_surplus_w: "{{ [0 - adjusted_house_power_w, 0] | max if house_power_valid else 0 }}"
-  solar_forecast_tomorrow_state: >-
-    {% if solar_forecast_tomorrow_sensor != '' %}
-      {{ states(solar_forecast_tomorrow_sensor) }}
-    {% else %}
-      none
-    {% endif %}
-  solar_forecast_tomorrow_valid: >-
-    {{ solar_forecast_tomorrow_sensor != ''
-       and is_number(solar_forecast_tomorrow_state)
-       and solar_forecast_tomorrow_state | float(0) >= 0 }}
-  solar_forecast_tomorrow_kwh: >-
-    {% if solar_forecast_tomorrow_valid | bool %}
-      {{ solar_forecast_tomorrow_state | float(0) }}
-    {% else %}
-      0
-    {% endif %}
 
   # Generated validation catches missing target entities and zero power limits
   # before any target update or custom action is executed.
@@ -294,38 +195,6 @@ variables:
     [[generated.batteries_json_lines]]
     {{ ns.items }}
   [[generated.count_vars]]
-  off_peak_total_capacity_kwh: >-
-    {{
-      (battery_1_usable_capacity_kwh | float(0) if slot_1_can_off_peak_charge | bool else 0)
-      + (battery_2_usable_capacity_kwh | float(0) if slot_2_can_off_peak_charge | bool else 0)
-      + (battery_3_usable_capacity_kwh | float(0) if slot_3_can_off_peak_charge | bool else 0)
-      + (battery_4_usable_capacity_kwh | float(0) if slot_4_can_off_peak_charge | bool else 0)
-    }}
-  off_peak_reserved_solar_kwh: >-
-    {% if solar_forecast_tomorrow_valid | bool and off_peak_total_capacity_kwh | float(0) > 0 %}
-      {% set requested = solar_forecast_tomorrow_kwh | float(0) * solar_reserve_share_pct | float(0) / 100 %}
-      {{ [requested, off_peak_total_capacity_kwh | float(0)] | min }}
-    {% else %}
-      0
-    {% endif %}
-  off_peak_target_soc_pct: >-
-    {% if solar_forecast_tomorrow_valid | bool and off_peak_total_capacity_kwh | float(0) > 0 %}
-      {{ 100 - ((off_peak_reserved_solar_kwh | float(0)) / (off_peak_total_capacity_kwh | float(0)) * 100) }}
-    {% else %}
-      0
-    {% endif %}
-  off_peak_target_valid: >-
-    {{ off_peak_active | bool
-       and off_peak_charge_power_limit_w | float(0) > 0
-       and solar_forecast_tomorrow_valid | bool
-       and off_peak_total_capacity_kwh | float(0) > 0
-       and off_peak_charge_capable_count | int(0) > 0 }}
-  off_peak_available_charge_w: >-
-    {% if not (off_peak_target_valid | bool) or not house_power_valid %}
-      0
-    {% else %}
-      {{ [off_peak_charge_power_limit_w | float(0), 0] | max }}
-    {% endif %}
   current_total_charge_w: >-
     {{
       (0 - (slot_1_current_target_w | float(0)) if slot_1_current_target_w | float(0) < 0 else 0)
@@ -337,14 +206,6 @@ variables:
       + (slot_3_current_target_w | float(0) if off_peak_active | bool and battery_3_target_power_uses_absolute_value | bool and slot_3_current_target_w | float(0) > 0 else 0)
       + (slot_4_current_target_w | float(0) if off_peak_active | bool and battery_4_target_power_uses_absolute_value | bool and slot_4_current_target_w | float(0) > 0 else 0)
     }}
-  off_peak_ready_to_charge: >-
-    {{ off_peak_target_valid | bool
-       and off_peak_available_charge_w | float(0) >= control_deadband_w | float(0)
-       and (
-         off_peak_elapsed_minutes | float(0) >= 15
-         or current_total_charge_w | float(0) >= control_deadband_w | float(0)
-         or off_peak_trigger_briefly_reactivated | bool
-       ) }}
   current_total_discharge_w: >-
     {{
       (slot_1_current_target_w | float(0) if slot_1_current_target_w | float(0) > 0 and not (off_peak_active | bool and battery_1_target_power_uses_absolute_value | bool) else 0)
@@ -364,10 +225,8 @@ variables:
   operating_mode: >-
     {% if not house_power_valid %}
       invalid_sensor
-    {% elif off_peak_ready_to_charge | bool %}
-      off_peak_charge
     {% elif off_peak_active | bool %}
-      off_peak_idle
+      off_peak_charge
     {% elif import_need_w >= control_deadband_w and discharge_capable_count > 0 %}
       discharge
     {% elif hold_discharge_mode %}
@@ -494,56 +353,6 @@ variables:
     {% else %}
       0
     {% endif %}
-  off_peak_charge_order: >-
-    {% set ns = namespace(candidates=[]) %}
-    {% for battery in batteries %}
-      {% if battery.can_off_peak_charge and battery.soc | float(0) < off_peak_target_soc_pct | float(0) %}
-        {% set ns.candidates = ns.candidates + [battery] %}
-      {% endif %}
-    {% endfor %}
-    {{ (ns.candidates | sort(attribute='cooldown_s')) | sort(attribute='soc') }}
-  off_peak_charge_order_slots: >-
-    {% set ns = namespace(slots=[]) %}
-    {% for battery in off_peak_charge_order %}
-      {% set ns.slots = ns.slots + [battery.slot | int(0)] %}
-    {% endfor %}
-    {{ ns.slots }}
-  off_peak_rank_1: >-
-    {% set ns = namespace(rank=0) %}
-    {% for battery in off_peak_charge_order %}
-      {% if battery.slot | int(0) == 1 %}
-        {% set ns.rank = loop.index %}
-      {% endif %}
-    {% endfor %}
-    {{ ns.rank }}
-  off_peak_rank_2: >-
-    {% set ns = namespace(rank=0) %}
-    {% for battery in off_peak_charge_order %}
-      {% if battery.slot | int(0) == 2 %}
-        {% set ns.rank = loop.index %}
-      {% endif %}
-    {% endfor %}
-    {{ ns.rank }}
-  off_peak_rank_3: >-
-    {% set ns = namespace(rank=0) %}
-    {% for battery in off_peak_charge_order %}
-      {% if battery.slot | int(0) == 3 %}
-        {% set ns.rank = loop.index %}
-      {% endif %}
-    {% endfor %}
-    {{ ns.rank }}
-  off_peak_rank_4: >-
-    {% set ns = namespace(rank=0) %}
-    {% for battery in off_peak_charge_order %}
-      {% if battery.slot | int(0) == 4 %}
-        {% set ns.rank = loop.index %}
-      {% endif %}
-    {% endfor %}
-    {{ ns.rank }}
-  off_peak_stagger_ready_1: "{{ off_peak_rank_1 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_1 | int(0) * 15 or slot_1_current_target_w | float(0) < 0 or off_peak_trigger_briefly_reactivated | bool) }}"
-  off_peak_stagger_ready_2: "{{ off_peak_rank_2 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_2 | int(0) * 15 or slot_2_current_target_w | float(0) < 0 or off_peak_trigger_briefly_reactivated | bool) }}"
-  off_peak_stagger_ready_3: "{{ off_peak_rank_3 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_3 | int(0) * 15 or slot_3_current_target_w | float(0) < 0 or off_peak_trigger_briefly_reactivated | bool) }}"
-  off_peak_stagger_ready_4: "{{ off_peak_rank_4 | int(0) > 0 and (off_peak_elapsed_minutes | float(0) >= off_peak_rank_4 | int(0) * 15 or slot_4_current_target_w | float(0) < 0 or off_peak_trigger_briefly_reactivated | bool) }}"
   charge_order: >-
     {% set ns = namespace(regular=[], headroom=[]) %}
     {% for battery in batteries %}
@@ -826,46 +635,7 @@ variables:
     {% set batteries = emergency_charge_order if emergency_charge_active | bool else charge_order %}
     {% set charge_need = emergency_charge_surplus_w | float(0) if emergency_charge_active | bool else export_surplus_w | float(0) %}
     {% set ns = namespace(remaining=[(charge_need | float(0)) - (uncommanded_actual_charge_w | float(0)), 0] | max, t1=0, t2=0, t3=0, t4=0) %}
-    {% if operating_mode == 'off_peak_charge' %}
-      {% set ns.remaining = [(off_peak_available_charge_w | float(0)) - (uncommanded_actual_charge_w | float(0)), 0] | max %}
-      {% for battery in off_peak_charge_order %}
-        {% set stagger_ready = off_peak_elapsed_minutes | float(0) >= loop.index * 15 or battery.commanded_charge | float(0) > 0 or off_peak_trigger_briefly_reactivated | bool %}
-        {% if stagger_ready and battery.charge_locked %}
-          {% set allocation = [battery.current_charge, battery.max_charge] | min %}
-          {% set allocation = [allocation, 0] | max %}
-          {% if battery.slot == 1 %}
-            {% set ns.t1 = allocation | round(0) %}
-          {% elif battery.slot == 2 %}
-            {% set ns.t2 = allocation | round(0) %}
-          {% elif battery.slot == 3 %}
-            {% set ns.t3 = allocation | round(0) %}
-          {% elif battery.slot == 4 %}
-            {% set ns.t4 = allocation | round(0) %}
-          {% endif %}
-          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
-        {% endif %}
-      {% endfor %}
-      {% for battery in off_peak_charge_order %}
-        {% set stagger_ready = off_peak_elapsed_minutes | float(0) >= loop.index * 15 or battery.commanded_charge | float(0) > 0 or off_peak_trigger_briefly_reactivated | bool %}
-        {% if ns.remaining > 0
-              and stagger_ready
-              and not battery.charge_locked
-              and (not battery.discharge_locked or battery.responsive) %}
-          {% set allocation = [battery.max_charge, ns.remaining] | min %}
-          {% set allocation = [allocation, 0] | max %}
-          {% if battery.slot == 1 %}
-            {% set ns.t1 = allocation | round(0) %}
-          {% elif battery.slot == 2 %}
-            {% set ns.t2 = allocation | round(0) %}
-          {% elif battery.slot == 3 %}
-            {% set ns.t3 = allocation | round(0) %}
-          {% elif battery.slot == 4 %}
-            {% set ns.t4 = allocation | round(0) %}
-          {% endif %}
-          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
-        {% endif %}
-      {% endfor %}
-    {% elif operating_mode == 'charge' or emergency_charge_active | bool %}
+    {% if operating_mode == 'charge' or emergency_charge_active | bool %}
       {% for battery in batteries %}
         {% set battery_discharge_target = 0 %}
         {% if battery.slot == 1 %}
@@ -1022,6 +792,10 @@ variables:
       or (should_run_charge_actions_2 | bool)
       or (should_run_charge_actions_3 | bool)
       or (should_run_charge_actions_4 | bool)
+      or (should_run_night_charge_actions_1 | bool)
+      or (should_run_night_charge_actions_2 | bool)
+      or (should_run_night_charge_actions_3 | bool)
+      or (should_run_night_charge_actions_4 | bool)
     }}
   should_stop_small_house_power_delta: >-
     {{
@@ -1034,16 +808,6 @@ variables:
       small_delta_skipped
     {% elif operating_mode == 'invalid_sensor' %}
       invalid_sensor
-    {% elif off_peak_active | bool and off_peak_charge_power_limit_w | float(0) <= 0 %}
-      off_peak_disabled_by_charge_power_limit
-    {% elif off_peak_active | bool and not (solar_forecast_tomorrow_valid | bool) %}
-      off_peak_invalid_solar_forecast
-    {% elif off_peak_active | bool and off_peak_total_capacity_kwh | float(0) <= 0 %}
-      off_peak_no_configured_capacity
-    {% elif off_peak_active | bool and off_peak_elapsed_minutes | float(0) < 15 %}
-      off_peak_waiting_for_stagger
-    {% elif off_peak_active | bool and off_peak_available_charge_w | float(0) < control_deadband_w | float(0) %}
-      off_peak_charge_power_limit_reached
     {% else %}
       {{ operating_mode }}
     {% endif %}
@@ -1057,11 +821,6 @@ variables:
         'max_discharge_w': battery_1_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_1_min_discharge_soc_pct | float(0),
         'max_charge_w': battery_1_max_charge_w | float(0),
-        'usable_capacity_kwh': battery_1_usable_capacity_kwh | float(0),
-        'off_peak_charge_enabled': battery_1_off_peak_charge_enabled | bool,
-        'can_off_peak_charge': slot_1_can_off_peak_charge | bool,
-        'off_peak_rank': off_peak_rank_1 | int(0),
-        'off_peak_stagger_ready': off_peak_stagger_ready_1 | bool,
         'current_target_w': slot_1_current_target_w | float(0),
         'signed_target_w': signed_target_1 | float(0),
         'discharge_target_w': discharge_target_1 | float(0),
@@ -1083,7 +842,8 @@ variables:
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_1 | bool,
         'should_write_target': should_write_target_power_1 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_1 | bool,
-        'should_run_charge_actions': should_run_charge_actions_1 | bool
+        'should_run_charge_actions': should_run_charge_actions_1 | bool,
+        'should_run_night_charge_actions': should_run_night_charge_actions_1 | bool
       },
       '2': {
         'used': slot_2_used | bool,
@@ -1093,11 +853,6 @@ variables:
         'max_discharge_w': battery_2_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_2_min_discharge_soc_pct | float(0),
         'max_charge_w': battery_2_max_charge_w | float(0),
-        'usable_capacity_kwh': battery_2_usable_capacity_kwh | float(0),
-        'off_peak_charge_enabled': battery_2_off_peak_charge_enabled | bool,
-        'can_off_peak_charge': slot_2_can_off_peak_charge | bool,
-        'off_peak_rank': off_peak_rank_2 | int(0),
-        'off_peak_stagger_ready': off_peak_stagger_ready_2 | bool,
         'current_target_w': slot_2_current_target_w | float(0),
         'signed_target_w': signed_target_2 | float(0),
         'discharge_target_w': discharge_target_2 | float(0),
@@ -1119,7 +874,8 @@ variables:
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_2 | bool,
         'should_write_target': should_write_target_power_2 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_2 | bool,
-        'should_run_charge_actions': should_run_charge_actions_2 | bool
+        'should_run_charge_actions': should_run_charge_actions_2 | bool,
+        'should_run_night_charge_actions': should_run_night_charge_actions_2 | bool
       },
       '3': {
         'used': slot_3_used | bool,
@@ -1129,11 +885,6 @@ variables:
         'max_discharge_w': battery_3_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_3_min_discharge_soc_pct | float(0),
         'max_charge_w': battery_3_max_charge_w | float(0),
-        'usable_capacity_kwh': battery_3_usable_capacity_kwh | float(0),
-        'off_peak_charge_enabled': battery_3_off_peak_charge_enabled | bool,
-        'can_off_peak_charge': slot_3_can_off_peak_charge | bool,
-        'off_peak_rank': off_peak_rank_3 | int(0),
-        'off_peak_stagger_ready': off_peak_stagger_ready_3 | bool,
         'current_target_w': slot_3_current_target_w | float(0),
         'signed_target_w': signed_target_3 | float(0),
         'discharge_target_w': discharge_target_3 | float(0),
@@ -1155,7 +906,8 @@ variables:
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_3 | bool,
         'should_write_target': should_write_target_power_3 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_3 | bool,
-        'should_run_charge_actions': should_run_charge_actions_3 | bool
+        'should_run_charge_actions': should_run_charge_actions_3 | bool,
+        'should_run_night_charge_actions': should_run_night_charge_actions_3 | bool
       },
       '4': {
         'used': slot_4_used | bool,
@@ -1165,11 +917,6 @@ variables:
         'max_discharge_w': battery_4_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_4_min_discharge_soc_pct | float(0),
         'max_charge_w': battery_4_max_charge_w | float(0),
-        'usable_capacity_kwh': battery_4_usable_capacity_kwh | float(0),
-        'off_peak_charge_enabled': battery_4_off_peak_charge_enabled | bool,
-        'can_off_peak_charge': slot_4_can_off_peak_charge | bool,
-        'off_peak_rank': off_peak_rank_4 | int(0),
-        'off_peak_stagger_ready': off_peak_stagger_ready_4 | bool,
         'current_target_w': slot_4_current_target_w | float(0),
         'signed_target_w': signed_target_4 | float(0),
         'discharge_target_w': discharge_target_4 | float(0),
@@ -1191,7 +938,8 @@ variables:
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_4 | bool,
         'should_write_target': should_write_target_power_4 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_4 | bool,
-        'should_run_charge_actions': should_run_charge_actions_4 | bool
+        'should_run_charge_actions': should_run_charge_actions_4 | bool,
+        'should_run_night_charge_actions': should_run_night_charge_actions_4 | bool
       }
     } | tojson }}
 
@@ -1203,19 +951,10 @@ actions:
       trigger_entity_id: "{{ trigger_entity_id }}"
       triggered_by_house_power_sensor: "{{ triggered_by_house_power_sensor }}"
       triggered_by_off_peak_entity: "{{ triggered_by_off_peak_entity }}"
+      triggered_by_start_or_reload: "{{ triggered_by_start_or_reload }}"
       off_peak_trigger_entered_active: "{{ off_peak_trigger_entered_active }}"
       operating_mode: "{{ operating_mode }}"
       off_peak_active: "{{ off_peak_active }}"
-      off_peak_elapsed_minutes: "{{ off_peak_elapsed_minutes | float(0) | round(1) }}"
-      off_peak_charge_power_limit_w: "{{ off_peak_charge_power_limit_w | float(0) | round(1) }}"
-      off_peak_total_capacity_kwh: "{{ off_peak_total_capacity_kwh | float(0) | round(2) }}"
-      off_peak_reserved_solar_kwh: "{{ off_peak_reserved_solar_kwh | float(0) | round(2) }}"
-      off_peak_target_soc_pct: "{{ off_peak_target_soc_pct | float(0) | round(1) }}"
-      off_peak_available_charge_w: "{{ off_peak_available_charge_w | float(0) | round(1) }}"
-      off_peak_charge_order_slots: "{{ off_peak_charge_order_slots | tojson }}"
-      solar_forecast_tomorrow_valid: "{{ solar_forecast_tomorrow_valid }}"
-      solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh | float(0) | round(2) }}"
-      solar_reserve_share_pct: "{{ solar_reserve_share_pct | float(0) | round(1) }}"
       house_power_valid: "{{ house_power_valid }}"
       house_power_w: "{{ house_power_w | float(0) | round(1) }}"
       adjusted_house_power_w: "{{ adjusted_house_power_w | float(0) | round(1) }}"

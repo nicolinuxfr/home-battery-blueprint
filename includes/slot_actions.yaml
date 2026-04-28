@@ -15,9 +15,6 @@
             import_need_w: "{{ import_need_w }}"
             export_surplus_w: "{{ export_surplus_w }}"
             off_peak_active: "{{ off_peak_active }}"
-            off_peak_target_soc_pct: "{{ off_peak_target_soc_pct }}"
-            solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh }}"
-            solar_reserve_share_pct: "{{ solar_reserve_share_pct }}"
             target_power_w: "{{ signed_target___SLOT__ | float(0) }}"
             target_discharge_w: "{{ discharge_target___SLOT__ | float(0) }}"
             target_charge_w: "{{ charge_target___SLOT__ | float(0) }}"
@@ -95,9 +92,6 @@
             import_need_w: "{{ import_need_w }}"
             export_surplus_w: "{{ export_surplus_w }}"
             off_peak_active: "{{ off_peak_active }}"
-            off_peak_target_soc_pct: "{{ off_peak_target_soc_pct }}"
-            solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh }}"
-            solar_reserve_share_pct: "{{ solar_reserve_share_pct }}"
             target_power_w: "{{ signed_target___SLOT__ | float(0) }}"
             target_discharge_w: "{{ discharge_target___SLOT__ | float(0) }}"
             target_charge_w: "{{ charge_target___SLOT__ | float(0) }}"
@@ -121,12 +115,32 @@
             import_need_w: "{{ import_need_w }}"
             export_surplus_w: "{{ export_surplus_w }}"
             off_peak_active: "{{ off_peak_active }}"
-            off_peak_target_soc_pct: "{{ off_peak_target_soc_pct }}"
-            solar_forecast_tomorrow_kwh: "{{ solar_forecast_tomorrow_kwh }}"
-            solar_reserve_share_pct: "{{ solar_reserve_share_pct }}"
             target_power_w: "{{ signed_target___SLOT__ | float(0) }}"
             target_discharge_w: "{{ discharge_target___SLOT__ | float(0) }}"
             target_charge_w: "{{ charge_target___SLOT__ | float(0) }}"
         - alias: "[[slot.__SLOT__]]: [[trace.execute_charge_actions_suffix]]"
           choose: []
           default: !input battery___SLOT___charge_actions
+- alias: "[[slot.__SLOT__]]: [[trace.run_night_charge_actions_suffix]]"
+  choose:
+    - alias: "[[slot.__SLOT__]]: [[trace.night_charge_actions_branch_suffix]]"
+      conditions:
+        - condition: template
+          value_template: "{{ should_run_night_charge_actions___SLOT__ }}"
+        - condition: template
+          value_template: "{{ house_power_valid }}"
+      sequence:
+        - alias: "[[slot.__SLOT__]]: [[trace.prepare_night_charge_context_suffix]]"
+          variables:
+            battery_slot: __SLOT__
+            battery_soc: "{{ slot___SLOT___soc }}"
+            house_power_w: "{{ house_power_w }}"
+            import_need_w: "{{ import_need_w }}"
+            export_surplus_w: "{{ export_surplus_w }}"
+            off_peak_active: "{{ off_peak_active }}"
+            target_power_w: "{{ signed_target___SLOT__ | float(0) }}"
+            target_discharge_w: "{{ discharge_target___SLOT__ | float(0) }}"
+            target_charge_w: "{{ charge_target___SLOT__ | float(0) }}"
+        - alias: "[[slot.__SLOT__]]: [[trace.execute_night_charge_actions_suffix]]"
+          choose: []
+          default: !input battery___SLOT___night_charge_actions

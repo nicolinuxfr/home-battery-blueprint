@@ -107,6 +107,7 @@ slot___SLOT___reserved_balance_power: >-
   {% endif %}
 slot___SLOT___has_discharge_actions: "{{ battery___SLOT___discharge_actions | count > 0 }}"
 slot___SLOT___has_charge_actions: "{{ battery___SLOT___charge_actions | count > 0 }}"
+slot___SLOT___has_night_charge_actions: "{{ battery___SLOT___night_charge_actions | count > 0 }}"
 slot___SLOT___discharge_delivery_stalled: >-
   {% set current_target = slot___SLOT___current_target_w | float(0) %}
   {% set actual_discharge = slot___SLOT___actual_discharge_w | float(0) %}
@@ -120,14 +121,9 @@ slot___SLOT___discharge_delivery_stalled: >-
   {% else %}
     false
   {% endif %}
-slot___SLOT___charge_delivery_stalled: "false"
 slot___SLOT___can_discharge: >-
   {{ slot___SLOT___used
      and slot___SLOT___target_entity_configured
      and battery___SLOT___max_discharge_w | float(0) > 0
      and slot___SLOT___soc | float(0) >= battery___SLOT___min_discharge_soc_pct | float(0) }}
 slot___SLOT___can_charge: "{{ slot___SLOT___used and slot___SLOT___target_entity_configured and battery___SLOT___max_charge_w | float(0) > 0 }}"
-slot___SLOT___can_off_peak_charge: >-
-  {{ slot___SLOT___can_charge | bool
-     and battery___SLOT___off_peak_charge_enabled | bool
-     and battery___SLOT___usable_capacity_kwh | float(0) > 0 }}

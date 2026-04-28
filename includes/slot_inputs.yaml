@@ -45,23 +45,6 @@ battery___SLOT___section:
           step: 10
           unit_of_measurement: W
           mode: box
-    battery___SLOT___usable_capacity_kwh:
-      name: "[[input.battery.usable_capacity_kwh.name]]"
-      description: "[[input.battery.usable_capacity_kwh.description]]"
-      default: 0
-      selector:
-        number:
-          min: 0
-          max: 100
-          step: 0.1
-          unit_of_measurement: kWh
-          mode: box
-    battery___SLOT___off_peak_charge_enabled:
-      name: "[[input.battery.off_peak_charge_enabled.name]]"
-      description: "[[input.battery.off_peak_charge_enabled.description]]"
-      default: false
-      selector:
-        boolean: {}
     battery___SLOT___reactive:
       name: "[[input.battery.reactive.name]]"
       description: "[[input.battery.reactive.description]]"
@@ -112,6 +95,12 @@ battery___SLOT___section:
     battery___SLOT___charge_actions:
       name: "[[input.battery.charge_actions.name]]"
       description: "[[input.battery.charge_actions.description]]"
+      default: []
+      selector:
+        action: {}
+    battery___SLOT___night_charge_actions:
+      name: "[[input.battery.night_charge_actions.name]]"
+      description: "[[input.battery.night_charge_actions.description]]"
       default: []
       selector:
         action: {}

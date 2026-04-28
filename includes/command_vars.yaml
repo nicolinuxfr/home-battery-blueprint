@@ -21,6 +21,14 @@ signed_target___SLOT__: >-
     {{ 0 - (charge_target___SLOT__ | float(0)) }}
   {% elif neutral_hold_active___SLOT__ %}
     {{ neutral_target___SLOT__ | float(0) }}
+  {% elif operating_mode == 'off_peak_charge'
+        and slot___SLOT___current_target_w | float(0) < 0 %}
+    {{ slot___SLOT___current_target_w | float(0) }}
+  {% elif operating_mode == 'off_peak_charge'
+        and battery___SLOT___target_power_uses_absolute_value | bool
+        and not (off_peak_trigger_entered_active | bool)
+        and slot___SLOT___current_target_w | float(0) > 0 %}
+    {{ 0 - (slot___SLOT___current_target_w | float(0)) }}
   {% else %}
     0
   {% endif %}
@@ -147,6 +155,8 @@ should_run_discharge_actions___SLOT__: >-
 should_run_charge_actions___SLOT__: >-
   {% if not slot___SLOT___has_charge_actions %}
     false
+  {% elif operating_mode == 'off_peak_charge' %}
+    false
   {% elif direction_change_blocked_by_cooldown___SLOT__ | bool %}
     false
   {% elif signed_target___SLOT__ | float(0) >= 0 %}
@@ -170,3 +180,10 @@ should_run_charge_actions___SLOT__: >-
   {% else %}
     {{ charge_cooldown_ok___SLOT__ }}
   {% endif %}
+should_run_night_charge_actions___SLOT__: >-
+  {{ slot___SLOT___has_night_charge_actions | bool
+     and off_peak_active | bool
+     and (
+       off_peak_trigger_entered_active | bool
+       or triggered_by_start_or_reload | bool
+     ) }}
