@@ -58,6 +58,8 @@ variables:
   high_soc_headroom_threshold_pct: 90
 
   allow_confirmed_flow_start_from_zero: true
+  # Reactive batteries may restart from 0 on confirmed flow immediately.
+  # Stable batteries still wait for their cooldown to avoid import/export yo-yo.
   actual_power_stale_timeout_s: 300
   run_started_ts: "{{ as_timestamp(now()) }}"
   battery_slot: 0

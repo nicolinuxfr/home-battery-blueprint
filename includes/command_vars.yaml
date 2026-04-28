@@ -78,11 +78,19 @@ start_from_zero_flow_confirmed___SLOT__: >-
      and (
        (desired_target_sign___SLOT__ | int(0) == 1
         and house_power_valid
-        and house_power_w | float(0) >= control_deadband_w | float(0))
+        and house_power_w | float(0) >= control_deadband_w | float(0)
+        and (
+          battery___SLOT___reactive | bool
+          or discharge_cooldown_ok___SLOT__ | bool
+        ))
        or
        (desired_target_sign___SLOT__ | int(0) == -1
         and house_power_valid
-        and house_power_w | float(0) <= 0 - (control_deadband_w | float(0)))
+        and house_power_w | float(0) <= 0 - (control_deadband_w | float(0))
+        and (
+          battery___SLOT___reactive | bool
+          or charge_cooldown_ok___SLOT__ | bool
+        ))
      ) }}
 discharge_increase_blocked_by_locked_reduction___SLOT__: >-
   {{ locked_discharge_reduction_pending | bool
