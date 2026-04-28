@@ -478,6 +478,7 @@ variables:
                 and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
           {% set trim_allowed = battery.responsive | bool
                 or not (responsive_charge_absorber_available | bool)
+                or ns.chargeable_raw_export_w | float(0) < opportunistic_charge_threshold_w | float(0)
                 or current_total_charge_w | float(0) >= control_deadband_w | float(0) %}
           {% if current_allocation > 0
                 and battery.actual_power_fresh
