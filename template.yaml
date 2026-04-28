@@ -56,6 +56,11 @@ variables:
   off_peak_entities: !input off_peak_entities
   control_deadband_w: 10
   high_soc_headroom_threshold_pct: 90
+  discharge_increase_step_w: 250
+  responsive_discharge_increase_step_w: 500
+  strong_import_threshold_w: 800
+  strong_import_discharge_increase_step_w: 1200
+  strong_import_discharge_budget_share_pct: 75
 
   allow_confirmed_flow_start_from_zero: true
   # Reactive batteries may restart from 0 on confirmed flow immediately.
@@ -180,6 +185,14 @@ variables:
     {% endif %}
   import_need_w: "{{ [adjusted_house_power_w, 0] | max if house_power_valid else 0 }}"
   export_surplus_w: "{{ [0 - adjusted_house_power_w, 0] | max if house_power_valid else 0 }}"
+  discharge_increase_budget_w: >-
+    {% if not house_power_valid %}
+      0
+    {% elif house_power_w | float(0) >= strong_import_threshold_w | float(0) %}
+      {{ (house_power_w | float(0)) * (strong_import_discharge_budget_share_pct | float(0)) / 100 }}
+    {% else %}
+      {{ [house_power_w | float(0) - control_deadband_w | float(0), 0] | max }}
+    {% endif %}
 
   # Generated validation catches missing target entities and zero power limits
   # before any target update or custom action is executed.
@@ -410,7 +423,8 @@ variables:
       t4=0,
       responsive_trim_remaining=0,
       cooldown_ready_trim_remaining=0,
-      export_latency_brake_remaining=0
+      export_latency_brake_remaining=0,
+      discharge_increase_budget_remaining=discharge_increase_budget_w | float(0)
     ) %}
     {% if operating_mode in ['discharge', 'discharge_hold'] %}
       {% for battery in discharge_hold_order %}
@@ -448,6 +462,11 @@ variables:
                   or not (responsive_charge_absorber_available | bool)
                   or battery.responsive | bool %}
             {% set allocation = [headroom, ns.remaining] | min if increase_allowed else 0 %}
+            {% set ramp_step = responsive_discharge_increase_step_w | float(0) if battery.responsive else discharge_increase_step_w | float(0) %}
+            {% if house_power_w | float(0) >= strong_import_threshold_w | float(0) %}
+              {% set ramp_step = [ramp_step, strong_import_discharge_increase_step_w | float(0)] | max %}
+            {% endif %}
+            {% set allocation = [allocation, ramp_step, ns.discharge_increase_budget_remaining | float(0)] | min %}
             {% if battery.slot == 1 %}
               {% set ns.t1 = (current_allocation + allocation) | round(0) %}
             {% elif battery.slot == 2 %}
@@ -458,6 +477,7 @@ variables:
               {% set ns.t4 = (current_allocation + allocation) | round(0) %}
             {% endif %}
             {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+            {% set ns.discharge_increase_budget_remaining = [ns.discharge_increase_budget_remaining | float(0) - allocation, 0] | max %}
           {% endif %}
         {% endfor %}
       {% endif %}
@@ -965,6 +985,12 @@ actions:
       export_surplus_w: "{{ export_surplus_w | float(0) | round(1) }}"
       current_total_discharge_w: "{{ current_total_discharge_w | float(0) | round(1) }}"
       current_total_charge_w: "{{ current_total_charge_w | float(0) | round(1) }}"
+      discharge_increase_budget_w: "{{ discharge_increase_budget_w | float(0) | round(1) }}"
+      discharge_increase_step_w: "{{ discharge_increase_step_w | float(0) | round(1) }}"
+      responsive_discharge_increase_step_w: "{{ responsive_discharge_increase_step_w | float(0) | round(1) }}"
+      strong_import_threshold_w: "{{ strong_import_threshold_w | float(0) | round(1) }}"
+      strong_import_discharge_increase_step_w: "{{ strong_import_discharge_increase_step_w | float(0) | round(1) }}"
+      strong_import_discharge_budget_share_pct: "{{ strong_import_discharge_budget_share_pct | float(0) | round(1) }}"
       discharge_export_guard_w: "{{ discharge_export_guard_w | float(0) | round(1) }}"
       responsive_discharge_export_trim_w: "{{ responsive_discharge_export_trim_w | float(0) | round(1) }}"
       cooldown_ready_discharge_export_trim_w: "{{ cooldown_ready_discharge_export_trim_w | float(0) | round(1) }}"
