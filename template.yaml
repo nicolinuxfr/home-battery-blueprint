@@ -967,6 +967,10 @@ variables:
     } | tojson }}
 
 actions:
+  # Night-charge actions run first. If they need to survive later automation
+  # restarts from a noisy house-power sensor, call script.turn_on here.
+  [[generated.night_charge_actions]]
+
   - alias: "[[trace.run_log_gate]]"
     event: home_battery_blueprint_run
     event_data:
