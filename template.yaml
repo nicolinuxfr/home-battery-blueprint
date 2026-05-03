@@ -797,6 +797,49 @@ variables:
       )
     }}
 
+  zero_target_actual_discharge_w: >-
+    {{
+      (slot_1_actual_discharge_w | float(0) if slot_1_used | bool and slot_1_actual_power_usable | bool and slot_1_current_target_w | float(0) <= control_deadband_w | float(0) and slot_1_actual_discharge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_2_actual_discharge_w | float(0) if slot_2_used | bool and slot_2_actual_power_usable | bool and slot_2_current_target_w | float(0) <= control_deadband_w | float(0) and slot_2_actual_discharge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_3_actual_discharge_w | float(0) if slot_3_used | bool and slot_3_actual_power_usable | bool and slot_3_current_target_w | float(0) <= control_deadband_w | float(0) and slot_3_actual_discharge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_4_actual_discharge_w | float(0) if slot_4_used | bool and slot_4_actual_power_usable | bool and slot_4_current_target_w | float(0) <= control_deadband_w | float(0) and slot_4_actual_discharge_w | float(0) > control_deadband_w | float(0) else 0)
+    }}
+  zero_target_actual_charge_w: >-
+    {{
+      (slot_1_actual_charge_w | float(0) if slot_1_used | bool and slot_1_actual_power_usable | bool and slot_1_current_target_w | float(0) >= 0 - (control_deadband_w | float(0)) and slot_1_actual_charge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_2_actual_charge_w | float(0) if slot_2_used | bool and slot_2_actual_power_usable | bool and slot_2_current_target_w | float(0) >= 0 - (control_deadband_w | float(0)) and slot_2_actual_charge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_3_actual_charge_w | float(0) if slot_3_used | bool and slot_3_actual_power_usable | bool and slot_3_current_target_w | float(0) >= 0 - (control_deadband_w | float(0)) and slot_3_actual_charge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_4_actual_charge_w | float(0) if slot_4_used | bool and slot_4_actual_power_usable | bool and slot_4_current_target_w | float(0) >= 0 - (control_deadband_w | float(0)) and slot_4_actual_charge_w | float(0) > control_deadband_w | float(0) else 0)
+    }}
+  planned_discharge_total_w: >-
+    {{
+      (discharge_target_1 | float(0))
+      + (discharge_target_2 | float(0))
+      + (discharge_target_3 | float(0))
+      + (discharge_target_4 | float(0))
+    }}
+  planned_charge_total_w: >-
+    {{
+      (charge_target_1 | float(0))
+      + (charge_target_2 | float(0))
+      + (charge_target_3 | float(0))
+      + (charge_target_4 | float(0))
+    }}
+  corrected_import_need_w: "{{ [import_need_w | float(0) - zero_target_actual_discharge_w | float(0), 0] | max }}"
+  corrected_export_surplus_w: "{{ [export_surplus_w | float(0) - zero_target_actual_charge_w | float(0), 0] | max }}"
+  possible_duplicate_discharge_w: >-
+    {% if zero_target_actual_discharge_w | float(0) > control_deadband_w | float(0) %}
+      {{ [planned_discharge_total_w | float(0) - corrected_import_need_w | float(0), 0] | max }}
+    {% else %}
+      0
+    {% endif %}
+  possible_duplicate_charge_w: >-
+    {% if zero_target_actual_charge_w | float(0) > control_deadband_w | float(0) %}
+      {{ [planned_charge_total_w | float(0) - corrected_export_surplus_w | float(0), 0] | max }}
+    {% else %}
+      0
+    {% endif %}
+
   [[generated.command_vars]]
   pending_slot_target_updates: >-
     {{
@@ -989,6 +1032,14 @@ actions:
       export_surplus_w: "{{ export_surplus_w | float(0) | round(1) }}"
       current_total_discharge_w: "{{ current_total_discharge_w | float(0) | round(1) }}"
       current_total_charge_w: "{{ current_total_charge_w | float(0) | round(1) }}"
+      zero_target_actual_discharge_w: "{{ zero_target_actual_discharge_w | float(0) | round(1) }}"
+      zero_target_actual_charge_w: "{{ zero_target_actual_charge_w | float(0) | round(1) }}"
+      planned_discharge_total_w: "{{ planned_discharge_total_w | float(0) | round(1) }}"
+      planned_charge_total_w: "{{ planned_charge_total_w | float(0) | round(1) }}"
+      corrected_import_need_w: "{{ corrected_import_need_w | float(0) | round(1) }}"
+      corrected_export_surplus_w: "{{ corrected_export_surplus_w | float(0) | round(1) }}"
+      possible_duplicate_discharge_w: "{{ possible_duplicate_discharge_w | float(0) | round(1) }}"
+      possible_duplicate_charge_w: "{{ possible_duplicate_charge_w | float(0) | round(1) }}"
       discharge_increase_budget_w: "{{ discharge_increase_budget_w | float(0) | round(1) }}"
       discharge_increase_step_w: "{{ discharge_increase_step_w | float(0) | round(1) }}"
       responsive_discharge_increase_step_w: "{{ responsive_discharge_increase_step_w | float(0) | round(1) }}"
@@ -1008,7 +1059,7 @@ actions:
       discharge_targets: "{{ discharge_targets | tojson }}"
       charge_targets: "{{ charge_targets | tojson }}"
       neutral_targets: "{{ neutral_targets | tojson }}"
-      slots: "{{ run_log_slots_json }}"
+      slots: "{{ run_log_slots_json | from_json }}"
 
   - alias: "[[trace.validation_gate]]"
     choose:
