@@ -56,6 +56,8 @@ variables:
   off_peak_entities: !input off_peak_entities
   control_deadband_w: 10
   high_soc_headroom_threshold_pct: 90
+  low_soc_priority_margin_pct: 5
+  low_soc_priority_gap_pct: 20
   discharge_increase_step_w: 250
   responsive_discharge_increase_step_w: 500
   strong_import_threshold_w: 800
@@ -254,11 +256,26 @@ variables:
       neutral
     {% endif %}
 
+  soft_low_discharge_priority_active: >-
+    {% set ns = namespace(active=false) %}
+    {% for battery in batteries %}
+      {% if battery.soft_low_soc_priority | bool %}
+        {% for other in batteries %}
+          {% if other.slot != battery.slot
+                and other.discharge_available
+                and not (other.soft_low_soc_priority | bool)
+                and other.soc | float(0) >= battery.soc | float(0) + low_soc_priority_gap_pct | float(0) %}
+            {% set ns.active = true %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.active }}
   discharge_hold_order: >-
     {% set ns = namespace(candidates=[]) %}
     {% for battery in batteries %}
       {% if battery.can_discharge and battery.commanded_discharge | float(0) > 0 %}
-        {% set hold = namespace(better_same_cooldown_waiting=false) %}
+        {% set hold = namespace(better_same_cooldown_waiting=false, healthier_waiting=false) %}
         {% for other in batteries %}
           {% if other.slot != battery.slot
                 and other.discharge_available
@@ -273,26 +290,49 @@ variables:
                 ) %}
             {% set hold.better_same_cooldown_waiting = true %}
           {% endif %}
+          {% if other.slot != battery.slot
+                and battery.soft_low_soc_priority | bool
+                and other.discharge_available
+                and not (other.soft_low_soc_priority | bool)
+                and other.soc | float(0) >= battery.soc | float(0) + low_soc_priority_gap_pct | float(0) %}
+            {% set hold.healthier_waiting = true %}
+          {% endif %}
         {% endfor %}
-        {% if not hold.better_same_cooldown_waiting %}
+        {% if not hold.better_same_cooldown_waiting and not hold.healthier_waiting %}
           {% set ns.candidates = ns.candidates + [battery] %}
         {% endif %}
       {% endif %}
     {% endfor %}
     {{ (ns.candidates | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true) }}
   discharge_residual_order: >-
-    {% set ns = namespace(headroom=[], regular=[]) %}
+    {% set ns = namespace(headroom=[], regular=[], deferred=[]) %}
     {% for battery in batteries %}
       {% if battery.discharge_available %}
         {% if battery.headroom_priority %}
           {% set ns.headroom = ns.headroom + [battery] %}
         {% else %}
-          {% set ns.regular = ns.regular + [battery] %}
+          {% set defer = namespace(value=false) %}
+          {% if battery.soft_low_soc_priority | bool %}
+            {% for other in batteries %}
+              {% if other.slot != battery.slot
+                    and other.discharge_available
+                    and not (other.soft_low_soc_priority | bool)
+                    and other.soc | float(0) >= battery.soc | float(0) + low_soc_priority_gap_pct | float(0) %}
+                {% set defer.value = true %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          {% if defer.value %}
+            {% set ns.deferred = ns.deferred + [battery] %}
+          {% else %}
+            {% set ns.regular = ns.regular + [battery] %}
+          {% endif %}
         {% endif %}
       {% endif %}
     {% endfor %}
     {{ (ns.headroom | sort(attribute='cooldown_s') | sort(attribute='soc', reverse=true))
-       + ((ns.regular | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true)) }}
+       + ((ns.regular | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true))
+       + ((ns.deferred | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true)) }}
   discharge_trim_order: >-
     {% set ns = namespace(regular=[], headroom=[]) %}
     {% for battery in batteries %}
@@ -886,6 +926,7 @@ variables:
         'cooldown_s': battery_1_cooldown_seconds | float(0),
         'max_discharge_w': battery_1_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_1_min_discharge_soc_pct | float(0),
+        'soft_low_soc_priority': (slot_1_can_discharge | bool) and not (slot_1_discharge_delivery_stalled | bool) and slot_1_soc | float(0) <= battery_1_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
         'max_charge_w': battery_1_max_charge_w | float(0),
         'current_target_w': slot_1_current_target_w | float(0),
         'signed_target_w': signed_target_1 | float(0),
@@ -918,6 +959,7 @@ variables:
         'cooldown_s': battery_2_cooldown_seconds | float(0),
         'max_discharge_w': battery_2_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_2_min_discharge_soc_pct | float(0),
+        'soft_low_soc_priority': (slot_2_can_discharge | bool) and not (slot_2_discharge_delivery_stalled | bool) and slot_2_soc | float(0) <= battery_2_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
         'max_charge_w': battery_2_max_charge_w | float(0),
         'current_target_w': slot_2_current_target_w | float(0),
         'signed_target_w': signed_target_2 | float(0),
@@ -950,6 +992,7 @@ variables:
         'cooldown_s': battery_3_cooldown_seconds | float(0),
         'max_discharge_w': battery_3_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_3_min_discharge_soc_pct | float(0),
+        'soft_low_soc_priority': (slot_3_can_discharge | bool) and not (slot_3_discharge_delivery_stalled | bool) and slot_3_soc | float(0) <= battery_3_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
         'max_charge_w': battery_3_max_charge_w | float(0),
         'current_target_w': slot_3_current_target_w | float(0),
         'signed_target_w': signed_target_3 | float(0),
@@ -982,6 +1025,7 @@ variables:
         'cooldown_s': battery_4_cooldown_seconds | float(0),
         'max_discharge_w': battery_4_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_4_min_discharge_soc_pct | float(0),
+        'soft_low_soc_priority': (slot_4_can_discharge | bool) and not (slot_4_discharge_delivery_stalled | bool) and slot_4_soc | float(0) <= battery_4_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
         'max_charge_w': battery_4_max_charge_w | float(0),
         'current_target_w': slot_4_current_target_w | float(0),
         'signed_target_w': signed_target_4 | float(0),
@@ -1042,6 +1086,9 @@ actions:
       strong_import_threshold_w: "{{ strong_import_threshold_w | float(0) | round(1) }}"
       strong_import_discharge_increase_step_w: "{{ strong_import_discharge_increase_step_w | float(0) | round(1) }}"
       strong_import_discharge_budget_share_pct: "{{ strong_import_discharge_budget_share_pct | float(0) | round(1) }}"
+      low_soc_priority_margin_pct: "{{ low_soc_priority_margin_pct | float(0) | round(1) }}"
+      low_soc_priority_gap_pct: "{{ low_soc_priority_gap_pct | float(0) | round(1) }}"
+      soft_low_discharge_priority_active: "{{ soft_low_discharge_priority_active }}"
       discharge_export_guard_w: "{{ discharge_export_guard_w | float(0) | round(1) }}"
       responsive_discharge_export_trim_w: "{{ responsive_discharge_export_trim_w | float(0) | round(1) }}"
       cooldown_ready_discharge_export_trim_w: "{{ cooldown_ready_discharge_export_trim_w | float(0) | round(1) }}"

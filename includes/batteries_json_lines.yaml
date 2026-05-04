@@ -28,6 +28,7 @@
     'max_charge': battery___SLOT___max_charge_w | float(0),
     'can_discharge': slot___SLOT___can_discharge | bool,
     'discharge_available': (slot___SLOT___can_discharge | bool) and not (slot___SLOT___discharge_delivery_stalled | bool),
+    'soft_low_soc_priority': (slot___SLOT___can_discharge | bool) and not (slot___SLOT___discharge_delivery_stalled | bool) and slot___SLOT___soc | float(0) <= battery___SLOT___min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
     'can_charge': slot___SLOT___can_charge | bool,
     'commanded_discharge': commanded_discharge,
     'commanded_charge': commanded_charge,
