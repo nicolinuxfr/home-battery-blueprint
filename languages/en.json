@@ -1,14 +1,18 @@
 {
   "blueprint.name": "Smart Home Battery",
-  "blueprint.description": "Generic Home Assistant blueprint for up to four batteries. It allocates discharge from house demand, can trigger opportunistic charging during real export, stops managed discharge during off-peak periods, and writes a signed power target for each battery into a numeric entity, with optional custom actions for integrations that need a separate mode switch.",
+  "blueprint.description": "Generic Home Assistant blueprint for up to four batteries. It allocates discharge from house demand, can trigger opportunistic charging during real export, pauses normal target control during off-peak periods to run night charge actions, and writes a signed power target for each battery into a numeric entity, with optional custom actions for integrations that need a separate mode switch.",
   "blueprint.version.line": "Version: {version}",
   "message.invalid_sensor": "House power sensor {{ house_power_sensor }} is unavailable or not numeric.",
   "message.small_delta_skipped": "House power sensor delta below trigger threshold:",
+  "message.off_peak_actions_only": "Off-peak period active: night charge actions have been handled, normal target control is skipped.",
   "trace.validation_gate": "Validation and sensor guardrails",
   "trace.small_delta_branch": "Small house power delta",
   "trace.stop_small_delta": "Stop on small house power delta",
   "trace.invalid_sensor_branch": "Invalid house power sensor",
   "trace.stop_invalid_sensor": "Stop on sensor error",
+  "trace.off_peak_gate": "Off-peak actions-only guardrail",
+  "trace.off_peak_branch": "Off-peak period active",
+  "trace.stop_off_peak": "Stop after night charge actions",
   "trace.run_log_gate": "Emit full run log event",
   "trace.write_target_suffix": "update signed target",
   "trace.target_update_branch_suffix": "target update required",
@@ -37,7 +41,7 @@
   "input.house_power_sensor.name": "House power sensor",
   "input.house_power_sensor.description": "Main house power sensor. This selector only shows power sensors. Use a signed sensor in watts with positive values for import and negative values for export.",
   "input.off_peak_entities.name": "Active off-peak entities",
-  "input.off_peak_entities.description": "Optional entities that turn on during off-peak periods. If at least one selected entity stays on for 15 seconds, the blueprint stops commanding discharge and runs the configured night charge actions. Leaving on is handled immediately.",
+  "input.off_peak_entities.description": "Optional entities that turn on during off-peak periods. If at least one selected entity stays on for 15 seconds, the blueprint stops normal target control and runs the configured night charge actions. Leaving on is handled immediately.",
   "input.battery.soc_sensor.name": "State of charge sensor",
   "input.battery.soc_sensor.description": "Leave empty to ignore this battery slot. Otherwise, this selector only shows battery sensors that report a charge percentage, and the chosen sensor enables the slot. An enabled slot must also expose a numeric target entity and at least one non-zero power limit.",
   "input.battery.max_discharge_w.name": "Maximum discharge power",
@@ -61,5 +65,5 @@
   "input.battery.charge_actions.name": "Charge actions",
   "input.battery.charge_actions.description": "Optional custom actions executed when this battery should actively charge from surplus export, and again when it should stop but still reports physical charge. They run on every active charge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions; target variables are initialized globally and then overwritten with the current slot values before this sequence runs.",
   "input.battery.night_charge_actions.name": "Night charge actions",
-  "input.battery.night_charge_actions.description": "Optional custom actions executed when off-peak periods become active, and after Home Assistant start or automation reload if an off-peak period is already active. Use them to put this battery in its overnight charging mode. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w, export_surplus_w and off_peak_active are available inside these actions."
+  "input.battery.night_charge_actions.description": "Optional custom actions executed when off-peak periods become active, and after Home Assistant start or automation reload if an off-peak period is already active. Use them to put this battery in its overnight charging mode; while off-peak remains active, normal target writes and charge/discharge actions are skipped after these actions run. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w, export_surplus_w and off_peak_active are available inside these actions."
 }

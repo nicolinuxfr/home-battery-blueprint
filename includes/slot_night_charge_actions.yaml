@@ -4,8 +4,6 @@
       conditions:
         - condition: template
           value_template: "{{ should_run_night_charge_actions___SLOT__ }}"
-        - condition: template
-          value_template: "{{ house_power_valid }}"
       sequence:
         - alias: "[[slot.__SLOT__]]: [[trace.prepare_night_charge_context_suffix]]"
           variables:

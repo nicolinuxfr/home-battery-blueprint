@@ -1010,10 +1010,6 @@ variables:
     } | tojson }}
 
 actions:
-  # Night-charge actions run first. If they need to survive later automation
-  # restarts from a noisy house-power sensor, call script.turn_on here.
-  [[generated.night_charge_actions]]
-
   - alias: "[[trace.run_log_gate]]"
     event: home_battery_blueprint_run
     event_data:
@@ -1060,6 +1056,20 @@ actions:
       charge_targets: "{{ charge_targets | tojson }}"
       neutral_targets: "{{ neutral_targets | tojson }}"
       slots: "{{ run_log_slots_json | from_json }}"
+
+  # During off-peak periods, custom night-charge actions own the battery mode
+  # and charge power. Keep them short/idempotent, or call script.turn_on.
+  [[generated.night_charge_actions]]
+
+  - alias: "[[trace.off_peak_gate]]"
+    choose:
+      - alias: "[[trace.off_peak_branch]]"
+        conditions:
+          - condition: template
+            value_template: "{{ off_peak_active }}"
+        sequence:
+          - alias: "[[trace.stop_off_peak]]"
+            stop: "[[message.off_peak_actions_only]]"
 
   - alias: "[[trace.validation_gate]]"
     choose:

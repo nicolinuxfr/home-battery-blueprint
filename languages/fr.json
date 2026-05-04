@@ -1,14 +1,18 @@
 {
   "blueprint.name": "Gestion de batteries domestiques",
-  "blueprint.description": "Blueprint Home Assistant générique pour piloter jusqu'à quatre batteries. Il répartit la décharge selon la demande maison, peut déclencher une charge opportuniste en cas d'export réel, arrête la décharge pilotée pendant les heures creuses, et écrit pour chaque batterie une consigne de puissance signée dans une entité numérique, avec des actions optionnelles pour les intégrations qui ont besoin d'un mode séparé.",
+  "blueprint.description": "Blueprint Home Assistant générique pour piloter jusqu'à quatre batteries. Il répartit la décharge selon la demande maison, peut déclencher une charge opportuniste en cas d'export réel, suspend le pilotage normal des consignes pendant les heures creuses pour lancer les actions de charge nocturne, et écrit pour chaque batterie une consigne de puissance signée dans une entité numérique, avec des actions optionnelles pour les intégrations qui ont besoin d'un mode séparé.",
   "blueprint.version.line": "Version : {version}",
   "message.invalid_sensor": "Le capteur de puissance maison {{ house_power_sensor }} est indisponible ou non numérique.",
   "message.small_delta_skipped": "Variation du capteur de puissance maison sous le seuil de déclenchement :",
+  "message.off_peak_actions_only": "Heures creuses actives : les actions de charge nocturne ont été traitées, le pilotage normal des consignes est ignoré.",
   "trace.validation_gate": "Validation et garde-fous capteur",
   "trace.small_delta_branch": "Faible variation de puissance maison",
   "trace.stop_small_delta": "Arrêt sur faible variation de puissance maison",
   "trace.invalid_sensor_branch": "Capteur de puissance maison invalide",
   "trace.stop_invalid_sensor": "Arrêt sur erreur capteur",
+  "trace.off_peak_gate": "Garde-fou heures creuses actions seules",
+  "trace.off_peak_branch": "Heures creuses actives",
+  "trace.stop_off_peak": "Arrêt après les actions de charge nocturne",
   "trace.run_log_gate": "Émettre l'événement complet de run",
   "trace.write_target_suffix": "mettre à jour la consigne signée",
   "trace.target_update_branch_suffix": "mise à jour de consigne nécessaire",
@@ -37,7 +41,7 @@
   "input.house_power_sensor.name": "Capteur de puissance maison",
   "input.house_power_sensor.description": "Capteur principal de puissance maison. Ce sélecteur n'affiche que les capteurs de puissance. Utilise un capteur signé en watts avec des valeurs positives en import et négatives en export.",
   "input.off_peak_entities.name": "Entités heures creuses actives",
-  "input.off_peak_entities.description": "Entités optionnelles qui passent à on pendant les heures creuses. Si au moins une entité sélectionnée reste à on pendant 15 secondes, le blueprint arrête de commander la décharge et exécute les actions de charge nocturne configurées. La sortie de l'état on est traitée immédiatement.",
+  "input.off_peak_entities.description": "Entités optionnelles qui passent à on pendant les heures creuses. Si au moins une entité sélectionnée reste à on pendant 15 secondes, le blueprint arrête le pilotage normal des consignes et exécute les actions de charge nocturne configurées. La sortie de l'état on est traitée immédiatement.",
   "input.battery.soc_sensor.name": "Capteur d'état de charge",
   "input.battery.soc_sensor.description": "Laisse ce champ vide pour ignorer ce slot. Sinon, ce sélecteur n'affiche que les capteurs de batterie qui remontent un pourcentage de charge, et le capteur choisi active le slot. Un slot activé doit aussi exposer une entité numérique de consigne et au moins une limite de puissance non nulle.",
   "input.battery.max_discharge_w.name": "Puissance maximale de décharge",
@@ -61,5 +65,5 @@
   "input.battery.charge_actions.name": "Actions de charge",
   "input.battery.charge_actions.description": "Actions personnalisées optionnelles exécutées quand cette batterie doit charger pour absorber un surplus exporté, puis à nouveau quand elle devrait s'arrêter mais remonte encore une charge physique. Elles tournent à chaque mise à jour active de consigne en charge. Les variables battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w et export_surplus_w sont disponibles dans ces actions ; les variables de consigne sont initialisées globalement puis remplacées par les valeurs du slot courant avant cette séquence.",
   "input.battery.night_charge_actions.name": "Actions de charge nocturne",
-  "input.battery.night_charge_actions.description": "Actions personnalisées optionnelles exécutées quand les heures creuses deviennent actives, ainsi qu'au démarrage de Home Assistant ou au rechargement des automatisations si une période heures creuses est déjà active. Utilise-les pour placer cette batterie dans son mode de charge nocturne. Les variables battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w, export_surplus_w et off_peak_active sont disponibles dans ces actions."
+  "input.battery.night_charge_actions.description": "Actions personnalisées optionnelles exécutées quand les heures creuses deviennent actives, ainsi qu'au démarrage de Home Assistant ou au rechargement des automatisations si une période heures creuses est déjà active. Utilise-les pour placer cette batterie dans son mode de charge nocturne ; tant que les heures creuses restent actives, les écritures normales de consigne et les actions charge/décharge sont ignorées après leur exécution. Les variables battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w, export_surplus_w et off_peak_active sont disponibles dans ces actions."
 }
