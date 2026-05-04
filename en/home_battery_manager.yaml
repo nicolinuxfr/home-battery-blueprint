@@ -1,0 +1,3814 @@
+blueprint:
+  name: "Smart Home Battery (2026.4.9)"
+  description: |-
+    Generic Home Assistant blueprint for up to four batteries. It allocates discharge from house demand, can trigger opportunistic charging during real export, pauses normal target control during off-peak periods to run night charge actions, and writes a signed power target for each battery into a numeric entity, with optional custom actions for integrations that need a separate mode switch.
+
+    Version: 2026.4.9 - [Changelog](https://github.com/nicolinuxfr/home-battery-blueprint/blob/main/CHANGELOG.md#202649)
+  domain: automation
+  source_url: https://github.com/nicolinuxfr/home-battery-blueprint
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    house_power_sensor:
+      name: "House power sensor"
+      description: "Main house power sensor. This selector only shows power sensors. Use a signed sensor in watts with positive values for import and negative values for export."
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: power
+    off_peak_entities:
+      name: "Active off-peak entities"
+      description: "Optional entities that turn on during off-peak periods. If at least one selected entity stays on for 15 seconds, the blueprint stops normal target control and runs the configured night charge actions. Leaving on is handled immediately."
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: binary_sensor
+            - domain: input_boolean
+            - domain: schedule
+    # Each battery slot is driven through a signed numeric target entity.
+    # Optional active-mode actions can translate that target to vendor-specific controls.
+    # Generated SoC selectors are limited to battery percentage sensors.
+    battery_1_section:
+      name: "Battery 1"
+      icon: mdi:battery
+      collapsed: true
+      input:
+        battery_1_soc_sensor:
+          name: "State of charge sensor"
+          description: "Leave empty to ignore this battery slot. Otherwise, this selector only shows battery sensors that report a charge percentage, and the chosen sensor enables the slot. An enabled slot must also expose a numeric target entity and at least one non-zero power limit."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: battery
+        battery_1_max_discharge_w:
+          name: "Maximum discharge power"
+          description: "Manual discharge limit used by the allocator for this battery."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5000
+              step: 10
+              unit_of_measurement: W
+              mode: box
+        battery_1_min_discharge_soc_pct:
+          name: "Minimum state of charge for discharge"
+          description: "Minimum state of charge required before this battery can be assigned discharge power. If the battery is below this threshold, the blueprint removes it from discharge allocation and writes 0 if it still has an active discharge target."
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+        battery_1_max_charge_w:
+          name: "Maximum charge power"
+          description: "Manual charge limit used by the allocator for opportunistic charging from real export. Set to 0 if this battery must never be charged by the blueprint."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5000
+              step: 10
+              unit_of_measurement: W
+              mode: box
+        battery_1_reactive:
+          name: "Reactive battery"
+          description: "Enable this option to make the battery reactive: it will be adjusted frequently to absorb residual demand changes and recover export as soon as possible. Leave it off (default) for stable behavior where the battery keeps a steady target and lets reactive batteries handle the variations."
+          default: false
+          selector:
+            boolean: {}
+        battery_1_cooldown_seconds:
+          name: "Command cooldown"
+          description: "Minimum delay between two active target updates for this battery. A short cooldown works best with reactive batteries so they can quickly absorb residual changes. A longer cooldown keeps the target steadier. Set it to 0 to disable the delay entirely. Writing `0` can still happen immediately so the blueprint can stop a battery for safety. Reactive batteries can restart from `0` immediately when the raw house meter confirms matching import or export. Non-reactive batteries wait for their cooldown before restarting from `0`, while raw export can still reduce an active discharge target before the cooldown expires."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 300
+              step: 5
+              unit_of_measurement: s
+              mode: slider
+        battery_1_target_power_entity:
+          name: "Target power entity"
+          description: "The `number` or `input_number` entity written by the blueprint. The target is signed in watts: positive for discharge, negative for charge, `0` for stop. If this battery should charge, the selected entity must accept negative values."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: number
+                - domain: input_number
+        battery_1_target_power_uses_absolute_value:
+          name: "Target entity uses absolute values"
+          description: "Enable this when the target entity expects a positive power magnitude for both charge and discharge. The blueprint keeps its internal signed target, but writes the absolute value to this entity. Use charge and discharge actions to select the battery mode when the integration needs a separate direction control."
+          default: false
+          selector:
+            boolean: {}
+        battery_1_actual_power_sensor:
+          name: "Actual power sensor"
+          description: "Optional power sensor that reports the battery's real output in watts. The allocator still uses the target entity and the house meter as its primary control loop. After the response grace period, a valid non-stale reading is used only as a guardrail to avoid counting a battery as real supply when it is no longer delivering. A stale reading does not prevent an idle battery from starting. If telemetry stays stale after an active target had time to react, that battery is kept out of extra discharge allocation while its already active target can stay in place unless a stop, sign change, or real export requires changing it."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: power
+        battery_1_discharge_actions:
+          name: "Discharge actions"
+          description: "Optional custom actions executed when this battery should actively discharge, and again when it should stop but still reports physical discharge. They run on every active discharge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions; target variables are initialized globally and then overwritten with the current slot values before this sequence runs."
+          default: []
+          selector:
+            action: {}
+        battery_1_charge_actions:
+          name: "Charge actions"
+          description: "Optional custom actions executed when this battery should actively charge from surplus export, and again when it should stop but still reports physical charge. They run on every active charge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions; target variables are initialized globally and then overwritten with the current slot values before this sequence runs."
+          default: []
+          selector:
+            action: {}
+        battery_1_night_charge_actions:
+          name: "Night charge actions"
+          description: "Optional custom actions executed when off-peak periods become active, and after Home Assistant start or automation reload if an off-peak period is already active. Use them to put this battery in its overnight charging mode; while off-peak remains active, normal target writes and charge/discharge actions are skipped after these actions run. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w, export_surplus_w and off_peak_active are available inside these actions."
+          default: []
+          selector:
+            action: {}
+    
+    battery_2_section:
+      name: "Battery 2"
+      icon: mdi:battery
+      collapsed: true
+      input:
+        battery_2_soc_sensor:
+          name: "State of charge sensor"
+          description: "Leave empty to ignore this battery slot. Otherwise, this selector only shows battery sensors that report a charge percentage, and the chosen sensor enables the slot. An enabled slot must also expose a numeric target entity and at least one non-zero power limit."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: battery
+        battery_2_max_discharge_w:
+          name: "Maximum discharge power"
+          description: "Manual discharge limit used by the allocator for this battery."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5000
+              step: 10
+              unit_of_measurement: W
+              mode: box
+        battery_2_min_discharge_soc_pct:
+          name: "Minimum state of charge for discharge"
+          description: "Minimum state of charge required before this battery can be assigned discharge power. If the battery is below this threshold, the blueprint removes it from discharge allocation and writes 0 if it still has an active discharge target."
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+        battery_2_max_charge_w:
+          name: "Maximum charge power"
+          description: "Manual charge limit used by the allocator for opportunistic charging from real export. Set to 0 if this battery must never be charged by the blueprint."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5000
+              step: 10
+              unit_of_measurement: W
+              mode: box
+        battery_2_reactive:
+          name: "Reactive battery"
+          description: "Enable this option to make the battery reactive: it will be adjusted frequently to absorb residual demand changes and recover export as soon as possible. Leave it off (default) for stable behavior where the battery keeps a steady target and lets reactive batteries handle the variations."
+          default: false
+          selector:
+            boolean: {}
+        battery_2_cooldown_seconds:
+          name: "Command cooldown"
+          description: "Minimum delay between two active target updates for this battery. A short cooldown works best with reactive batteries so they can quickly absorb residual changes. A longer cooldown keeps the target steadier. Set it to 0 to disable the delay entirely. Writing `0` can still happen immediately so the blueprint can stop a battery for safety. Reactive batteries can restart from `0` immediately when the raw house meter confirms matching import or export. Non-reactive batteries wait for their cooldown before restarting from `0`, while raw export can still reduce an active discharge target before the cooldown expires."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 300
+              step: 5
+              unit_of_measurement: s
+              mode: slider
+        battery_2_target_power_entity:
+          name: "Target power entity"
+          description: "The `number` or `input_number` entity written by the blueprint. The target is signed in watts: positive for discharge, negative for charge, `0` for stop. If this battery should charge, the selected entity must accept negative values."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: number
+                - domain: input_number
+        battery_2_target_power_uses_absolute_value:
+          name: "Target entity uses absolute values"
+          description: "Enable this when the target entity expects a positive power magnitude for both charge and discharge. The blueprint keeps its internal signed target, but writes the absolute value to this entity. Use charge and discharge actions to select the battery mode when the integration needs a separate direction control."
+          default: false
+          selector:
+            boolean: {}
+        battery_2_actual_power_sensor:
+          name: "Actual power sensor"
+          description: "Optional power sensor that reports the battery's real output in watts. The allocator still uses the target entity and the house meter as its primary control loop. After the response grace period, a valid non-stale reading is used only as a guardrail to avoid counting a battery as real supply when it is no longer delivering. A stale reading does not prevent an idle battery from starting. If telemetry stays stale after an active target had time to react, that battery is kept out of extra discharge allocation while its already active target can stay in place unless a stop, sign change, or real export requires changing it."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: power
+        battery_2_discharge_actions:
+          name: "Discharge actions"
+          description: "Optional custom actions executed when this battery should actively discharge, and again when it should stop but still reports physical discharge. They run on every active discharge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions; target variables are initialized globally and then overwritten with the current slot values before this sequence runs."
+          default: []
+          selector:
+            action: {}
+        battery_2_charge_actions:
+          name: "Charge actions"
+          description: "Optional custom actions executed when this battery should actively charge from surplus export, and again when it should stop but still reports physical charge. They run on every active charge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions; target variables are initialized globally and then overwritten with the current slot values before this sequence runs."
+          default: []
+          selector:
+            action: {}
+        battery_2_night_charge_actions:
+          name: "Night charge actions"
+          description: "Optional custom actions executed when off-peak periods become active, and after Home Assistant start or automation reload if an off-peak period is already active. Use them to put this battery in its overnight charging mode; while off-peak remains active, normal target writes and charge/discharge actions are skipped after these actions run. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w, export_surplus_w and off_peak_active are available inside these actions."
+          default: []
+          selector:
+            action: {}
+    
+    battery_3_section:
+      name: "Battery 3"
+      icon: mdi:battery
+      collapsed: true
+      input:
+        battery_3_soc_sensor:
+          name: "State of charge sensor"
+          description: "Leave empty to ignore this battery slot. Otherwise, this selector only shows battery sensors that report a charge percentage, and the chosen sensor enables the slot. An enabled slot must also expose a numeric target entity and at least one non-zero power limit."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: battery
+        battery_3_max_discharge_w:
+          name: "Maximum discharge power"
+          description: "Manual discharge limit used by the allocator for this battery."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5000
+              step: 10
+              unit_of_measurement: W
+              mode: box
+        battery_3_min_discharge_soc_pct:
+          name: "Minimum state of charge for discharge"
+          description: "Minimum state of charge required before this battery can be assigned discharge power. If the battery is below this threshold, the blueprint removes it from discharge allocation and writes 0 if it still has an active discharge target."
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+        battery_3_max_charge_w:
+          name: "Maximum charge power"
+          description: "Manual charge limit used by the allocator for opportunistic charging from real export. Set to 0 if this battery must never be charged by the blueprint."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5000
+              step: 10
+              unit_of_measurement: W
+              mode: box
+        battery_3_reactive:
+          name: "Reactive battery"
+          description: "Enable this option to make the battery reactive: it will be adjusted frequently to absorb residual demand changes and recover export as soon as possible. Leave it off (default) for stable behavior where the battery keeps a steady target and lets reactive batteries handle the variations."
+          default: false
+          selector:
+            boolean: {}
+        battery_3_cooldown_seconds:
+          name: "Command cooldown"
+          description: "Minimum delay between two active target updates for this battery. A short cooldown works best with reactive batteries so they can quickly absorb residual changes. A longer cooldown keeps the target steadier. Set it to 0 to disable the delay entirely. Writing `0` can still happen immediately so the blueprint can stop a battery for safety. Reactive batteries can restart from `0` immediately when the raw house meter confirms matching import or export. Non-reactive batteries wait for their cooldown before restarting from `0`, while raw export can still reduce an active discharge target before the cooldown expires."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 300
+              step: 5
+              unit_of_measurement: s
+              mode: slider
+        battery_3_target_power_entity:
+          name: "Target power entity"
+          description: "The `number` or `input_number` entity written by the blueprint. The target is signed in watts: positive for discharge, negative for charge, `0` for stop. If this battery should charge, the selected entity must accept negative values."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: number
+                - domain: input_number
+        battery_3_target_power_uses_absolute_value:
+          name: "Target entity uses absolute values"
+          description: "Enable this when the target entity expects a positive power magnitude for both charge and discharge. The blueprint keeps its internal signed target, but writes the absolute value to this entity. Use charge and discharge actions to select the battery mode when the integration needs a separate direction control."
+          default: false
+          selector:
+            boolean: {}
+        battery_3_actual_power_sensor:
+          name: "Actual power sensor"
+          description: "Optional power sensor that reports the battery's real output in watts. The allocator still uses the target entity and the house meter as its primary control loop. After the response grace period, a valid non-stale reading is used only as a guardrail to avoid counting a battery as real supply when it is no longer delivering. A stale reading does not prevent an idle battery from starting. If telemetry stays stale after an active target had time to react, that battery is kept out of extra discharge allocation while its already active target can stay in place unless a stop, sign change, or real export requires changing it."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: power
+        battery_3_discharge_actions:
+          name: "Discharge actions"
+          description: "Optional custom actions executed when this battery should actively discharge, and again when it should stop but still reports physical discharge. They run on every active discharge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions; target variables are initialized globally and then overwritten with the current slot values before this sequence runs."
+          default: []
+          selector:
+            action: {}
+        battery_3_charge_actions:
+          name: "Charge actions"
+          description: "Optional custom actions executed when this battery should actively charge from surplus export, and again when it should stop but still reports physical charge. They run on every active charge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions; target variables are initialized globally and then overwritten with the current slot values before this sequence runs."
+          default: []
+          selector:
+            action: {}
+        battery_3_night_charge_actions:
+          name: "Night charge actions"
+          description: "Optional custom actions executed when off-peak periods become active, and after Home Assistant start or automation reload if an off-peak period is already active. Use them to put this battery in its overnight charging mode; while off-peak remains active, normal target writes and charge/discharge actions are skipped after these actions run. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w, export_surplus_w and off_peak_active are available inside these actions."
+          default: []
+          selector:
+            action: {}
+    
+    battery_4_section:
+      name: "Battery 4"
+      icon: mdi:battery
+      collapsed: true
+      input:
+        battery_4_soc_sensor:
+          name: "State of charge sensor"
+          description: "Leave empty to ignore this battery slot. Otherwise, this selector only shows battery sensors that report a charge percentage, and the chosen sensor enables the slot. An enabled slot must also expose a numeric target entity and at least one non-zero power limit."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: battery
+        battery_4_max_discharge_w:
+          name: "Maximum discharge power"
+          description: "Manual discharge limit used by the allocator for this battery."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5000
+              step: 10
+              unit_of_measurement: W
+              mode: box
+        battery_4_min_discharge_soc_pct:
+          name: "Minimum state of charge for discharge"
+          description: "Minimum state of charge required before this battery can be assigned discharge power. If the battery is below this threshold, the blueprint removes it from discharge allocation and writes 0 if it still has an active discharge target."
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+        battery_4_max_charge_w:
+          name: "Maximum charge power"
+          description: "Manual charge limit used by the allocator for opportunistic charging from real export. Set to 0 if this battery must never be charged by the blueprint."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5000
+              step: 10
+              unit_of_measurement: W
+              mode: box
+        battery_4_reactive:
+          name: "Reactive battery"
+          description: "Enable this option to make the battery reactive: it will be adjusted frequently to absorb residual demand changes and recover export as soon as possible. Leave it off (default) for stable behavior where the battery keeps a steady target and lets reactive batteries handle the variations."
+          default: false
+          selector:
+            boolean: {}
+        battery_4_cooldown_seconds:
+          name: "Command cooldown"
+          description: "Minimum delay between two active target updates for this battery. A short cooldown works best with reactive batteries so they can quickly absorb residual changes. A longer cooldown keeps the target steadier. Set it to 0 to disable the delay entirely. Writing `0` can still happen immediately so the blueprint can stop a battery for safety. Reactive batteries can restart from `0` immediately when the raw house meter confirms matching import or export. Non-reactive batteries wait for their cooldown before restarting from `0`, while raw export can still reduce an active discharge target before the cooldown expires."
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 300
+              step: 5
+              unit_of_measurement: s
+              mode: slider
+        battery_4_target_power_entity:
+          name: "Target power entity"
+          description: "The `number` or `input_number` entity written by the blueprint. The target is signed in watts: positive for discharge, negative for charge, `0` for stop. If this battery should charge, the selected entity must accept negative values."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: number
+                - domain: input_number
+        battery_4_target_power_uses_absolute_value:
+          name: "Target entity uses absolute values"
+          description: "Enable this when the target entity expects a positive power magnitude for both charge and discharge. The blueprint keeps its internal signed target, but writes the absolute value to this entity. Use charge and discharge actions to select the battery mode when the integration needs a separate direction control."
+          default: false
+          selector:
+            boolean: {}
+        battery_4_actual_power_sensor:
+          name: "Actual power sensor"
+          description: "Optional power sensor that reports the battery's real output in watts. The allocator still uses the target entity and the house meter as its primary control loop. After the response grace period, a valid non-stale reading is used only as a guardrail to avoid counting a battery as real supply when it is no longer delivering. A stale reading does not prevent an idle battery from starting. If telemetry stays stale after an active target had time to react, that battery is kept out of extra discharge allocation while its already active target can stay in place unless a stop, sign change, or real export requires changing it."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: power
+        battery_4_discharge_actions:
+          name: "Discharge actions"
+          description: "Optional custom actions executed when this battery should actively discharge, and again when it should stop but still reports physical discharge. They run on every active discharge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions; target variables are initialized globally and then overwritten with the current slot values before this sequence runs."
+          default: []
+          selector:
+            action: {}
+        battery_4_charge_actions:
+          name: "Charge actions"
+          description: "Optional custom actions executed when this battery should actively charge from surplus export, and again when it should stop but still reports physical charge. They run on every active charge target update. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w and export_surplus_w are available inside these actions; target variables are initialized globally and then overwritten with the current slot values before this sequence runs."
+          default: []
+          selector:
+            action: {}
+        battery_4_night_charge_actions:
+          name: "Night charge actions"
+          description: "Optional custom actions executed when off-peak periods become active, and after Home Assistant start or automation reload if an off-peak period is already active. Use them to put this battery in its overnight charging mode; while off-peak remains active, normal target writes and charge/discharge actions are skipped after these actions run. Variables such as battery_slot, battery_soc, target_power_w, target_discharge_w, target_charge_w, house_power_w, import_need_w, export_surplus_w and off_peak_active are available inside these actions."
+          default: []
+          selector:
+            action: {}
+
+mode: restart
+
+triggers:
+  - trigger: homeassistant
+    event: start
+  - trigger: event
+    event_type: automation_reloaded
+  - trigger: state
+    entity_id: !input house_power_sensor
+    not_to: null
+  - trigger: state
+    entity_id: !input off_peak_entities
+    to: "on"
+    for: "00:00:15"
+  - trigger: state
+    entity_id: !input off_peak_entities
+    from: "on"
+
+variables:
+  house_power_sensor: !input house_power_sensor
+  off_peak_entities: !input off_peak_entities
+  control_deadband_w: 10
+  high_soc_headroom_threshold_pct: 90
+  low_soc_priority_margin_pct: 5
+  low_soc_priority_gap_pct: 20
+  discharge_increase_step_w: 250
+  responsive_discharge_increase_step_w: 500
+  strong_import_threshold_w: 800
+  strong_import_discharge_increase_step_w: 1200
+  strong_import_discharge_budget_share_pct: 75
+
+  allow_confirmed_flow_start_from_zero: true
+  # Reactive batteries may restart from 0 on confirmed flow immediately.
+  # Stable batteries still wait for their cooldown to avoid import/export yo-yo.
+  actual_power_stale_timeout_s: 300
+  run_started_ts: "{{ as_timestamp(now()) }}"
+  battery_slot: 0
+  battery_soc: 0
+  target_power_w: 0
+  target_discharge_w: 0
+  target_charge_w: 0
+
+  battery_1_soc_sensor: !input battery_1_soc_sensor
+  battery_1_max_discharge_w: !input battery_1_max_discharge_w
+  battery_1_min_discharge_soc_pct: !input battery_1_min_discharge_soc_pct
+  battery_1_max_charge_w: !input battery_1_max_charge_w
+  battery_1_reactive: !input battery_1_reactive
+  battery_1_cooldown_seconds: !input battery_1_cooldown_seconds
+  battery_1_target_power_entity: !input battery_1_target_power_entity
+  battery_1_target_power_uses_absolute_value: !input battery_1_target_power_uses_absolute_value
+  battery_1_actual_power_sensor: !input battery_1_actual_power_sensor
+  battery_1_discharge_actions: !input battery_1_discharge_actions
+  battery_1_charge_actions: !input battery_1_charge_actions
+  battery_1_night_charge_actions: !input battery_1_night_charge_actions
+  
+  battery_2_soc_sensor: !input battery_2_soc_sensor
+  battery_2_max_discharge_w: !input battery_2_max_discharge_w
+  battery_2_min_discharge_soc_pct: !input battery_2_min_discharge_soc_pct
+  battery_2_max_charge_w: !input battery_2_max_charge_w
+  battery_2_reactive: !input battery_2_reactive
+  battery_2_cooldown_seconds: !input battery_2_cooldown_seconds
+  battery_2_target_power_entity: !input battery_2_target_power_entity
+  battery_2_target_power_uses_absolute_value: !input battery_2_target_power_uses_absolute_value
+  battery_2_actual_power_sensor: !input battery_2_actual_power_sensor
+  battery_2_discharge_actions: !input battery_2_discharge_actions
+  battery_2_charge_actions: !input battery_2_charge_actions
+  battery_2_night_charge_actions: !input battery_2_night_charge_actions
+  
+  battery_3_soc_sensor: !input battery_3_soc_sensor
+  battery_3_max_discharge_w: !input battery_3_max_discharge_w
+  battery_3_min_discharge_soc_pct: !input battery_3_min_discharge_soc_pct
+  battery_3_max_charge_w: !input battery_3_max_charge_w
+  battery_3_reactive: !input battery_3_reactive
+  battery_3_cooldown_seconds: !input battery_3_cooldown_seconds
+  battery_3_target_power_entity: !input battery_3_target_power_entity
+  battery_3_target_power_uses_absolute_value: !input battery_3_target_power_uses_absolute_value
+  battery_3_actual_power_sensor: !input battery_3_actual_power_sensor
+  battery_3_discharge_actions: !input battery_3_discharge_actions
+  battery_3_charge_actions: !input battery_3_charge_actions
+  battery_3_night_charge_actions: !input battery_3_night_charge_actions
+  
+  battery_4_soc_sensor: !input battery_4_soc_sensor
+  battery_4_max_discharge_w: !input battery_4_max_discharge_w
+  battery_4_min_discharge_soc_pct: !input battery_4_min_discharge_soc_pct
+  battery_4_max_charge_w: !input battery_4_max_charge_w
+  battery_4_reactive: !input battery_4_reactive
+  battery_4_cooldown_seconds: !input battery_4_cooldown_seconds
+  battery_4_target_power_entity: !input battery_4_target_power_entity
+  battery_4_target_power_uses_absolute_value: !input battery_4_target_power_uses_absolute_value
+  battery_4_actual_power_sensor: !input battery_4_actual_power_sensor
+  battery_4_discharge_actions: !input battery_4_discharge_actions
+  battery_4_charge_actions: !input battery_4_charge_actions
+  battery_4_night_charge_actions: !input battery_4_night_charge_actions
+
+  trigger_entity_id: >-
+    {% if trigger is defined and trigger.platform == 'state' and trigger.entity_id is defined %}
+      {{ trigger.entity_id }}
+    {% else %}
+      
+    {% endif %}
+  triggered_by_off_peak_entity: "{{ trigger_entity_id in off_peak_entities }}"
+  triggered_by_house_power_sensor: "{{ trigger_entity_id == house_power_sensor }}"
+  triggered_by_start_or_reload: >-
+    {{ trigger is defined
+       and trigger.platform in ['homeassistant', 'event'] }}
+  off_peak_trigger_entered_active: >-
+    {% if triggered_by_off_peak_entity and trigger is defined and trigger.to_state is not none %}
+      {{ trigger.to_state.state == 'on' }}
+    {% else %}
+      false
+    {% endif %}
+  trigger_from_house_power_w: >-
+    {% if triggered_by_house_power_sensor and trigger is defined and trigger.from_state is not none %}
+      {% set value = trigger.from_state.state %}
+      {% if is_number(value) %}
+        {{ value | float(0) }}
+      {% else %}
+        none
+      {% endif %}
+    {% else %}
+      none
+    {% endif %}
+  trigger_to_house_power_w: >-
+    {% if triggered_by_house_power_sensor and trigger is defined and trigger.to_state is not none %}
+      {% set value = trigger.to_state.state %}
+      {% if is_number(value) %}
+        {{ value | float(0) }}
+      {% else %}
+        none
+      {% endif %}
+    {% else %}
+      none
+    {% endif %}
+  house_power_trigger_delta_w: >-
+    {% if trigger_from_house_power_w is not none and trigger_to_house_power_w is not none %}
+      {{ ((trigger_to_house_power_w | float(0)) - (trigger_from_house_power_w | float(0))) | abs }}
+    {% else %}
+      none
+    {% endif %}
+  should_skip_small_house_power_delta: >-
+    {% if not triggered_by_house_power_sensor %}
+      false
+    {% elif control_deadband_w | float(0) <= 0 %}
+      false
+    {% elif house_power_trigger_delta_w is none %}
+      false
+    {% else %}
+      {{ house_power_trigger_delta_w | float(0) < control_deadband_w | float(0) }}
+    {% endif %}
+  house_power_state: "{{ states(house_power_sensor) }}"
+  house_power_valid: "{{ is_number(house_power_state) }}"
+  house_power_w: "{{ house_power_state | float(0) if house_power_valid | bool else 0 }}"
+
+  # Generated slot state treats actual-power telemetry as a guardrail: stale
+  # telemetry never proves that a battery is stalled. When telemetry is stale,
+  # allocation falls back to the commanded target and waits for a valid reading.
+  slot_1_used: "{{ battery_1_soc_sensor != '' }}"
+  slot_1_soc: "{{ states(battery_1_soc_sensor) | float(0) if slot_1_used else 0 }}"
+  slot_1_target_entity_configured: "{{ battery_1_target_power_entity != '' }}"
+  slot_1_target_power_state: >-
+    {% if slot_1_target_entity_configured %}
+      {{ states(battery_1_target_power_entity) }}
+    {% else %}
+      0
+    {% endif %}
+  slot_1_target_last_changed_ts: >-
+    {% if slot_1_target_entity_configured %}
+      {% set target_state = states[battery_1_target_power_entity] %}
+      {{ as_timestamp(target_state.last_changed, 0) if target_state is not none else 0 }}
+    {% else %}
+      0
+    {% endif %}
+  slot_1_target_age_s: >-
+    {% if slot_1_target_last_changed_ts | float(0) > 0 %}
+      {{ [run_started_ts | float(0) - (slot_1_target_last_changed_ts | float(0)), 0] | max }}
+    {% else %}
+      0
+    {% endif %}
+  slot_1_response_grace_s: "{{ [20, battery_1_cooldown_seconds | float(0)] | max }}"
+  slot_1_current_target_w: >-
+    {% if slot_1_target_power_state in ['unknown', 'unavailable', 'none', ''] %}
+      0
+    {% else %}
+      {{ slot_1_target_power_state | float(0) }}
+    {% endif %}
+  slot_1_current_target_sign: >-
+    {% if slot_1_current_target_w | float(0) > 0 %}
+      1
+    {% elif slot_1_current_target_w | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  slot_1_actual_power_sensor_configured: "{{ battery_1_actual_power_sensor != '' }}"
+  slot_1_actual_power_state: >-
+    {% if slot_1_actual_power_sensor_configured %}
+      {{ states(battery_1_actual_power_sensor) }}
+    {% else %}
+      0
+    {% endif %}
+  slot_1_actual_power_last_updated_ts: >-
+    {% if slot_1_actual_power_sensor_configured %}
+      {% set actual_state = states[battery_1_actual_power_sensor] %}
+      {{ as_timestamp(actual_state.last_updated, 0) if actual_state is not none else 0 }}
+    {% else %}
+      0
+    {% endif %}
+  slot_1_actual_power_age_s: >-
+    {% if slot_1_actual_power_last_updated_ts | float(0) > 0 %}
+      {{ [run_started_ts | float(0) - (slot_1_actual_power_last_updated_ts | float(0)), 0] | max }}
+    {% else %}
+      999999
+    {% endif %}
+  slot_1_actual_power_w: >-
+    {% if slot_1_actual_power_state in ['unknown', 'unavailable', 'none', ''] %}
+      0
+    {% else %}
+      {{ slot_1_actual_power_state | float(0) }}
+    {% endif %}
+  slot_1_actual_power_valid: "{{ slot_1_actual_power_sensor_configured | bool and is_number(slot_1_actual_power_state) }}"
+  slot_1_actual_discharge_w: "{{ [slot_1_actual_power_w | float(0), 0] | max }}"
+  slot_1_actual_charge_w: "{{ [0 - (slot_1_actual_power_w | float(0)), 0] | max }}"
+  slot_1_actual_power_fresh: >-
+    {% if not (slot_1_actual_power_valid | bool) %}
+      false
+    {% else %}
+      {{ slot_1_actual_power_age_s | float(999999) <= [slot_1_response_grace_s | float(0), 45] | max }}
+    {% endif %}
+  slot_1_actual_power_stale: >-
+    {{ slot_1_actual_power_sensor_configured | bool
+       and (
+         not (slot_1_actual_power_valid | bool)
+         or slot_1_actual_power_age_s | float(999999) > actual_power_stale_timeout_s | float(0)
+       ) }}
+  slot_1_actual_power_usable: >-
+    {{ slot_1_actual_power_valid | bool
+       and not (slot_1_actual_power_stale | bool) }}
+  slot_1_effective_balance_power: >-
+    {% set current_target = slot_1_current_target_w | float(0) %}
+    {% if current_target == 0 %}
+      {% if slot_1_actual_power_usable | bool %}
+        {{ (slot_1_actual_discharge_w | float(0)) - (slot_1_actual_charge_w | float(0)) }}
+      {% else %}
+        0
+      {% endif %}
+    {% elif not (slot_1_actual_power_sensor_configured | bool) %}
+      {{ current_target }}
+    {% elif slot_1_actual_power_usable | bool %}
+      {{ (slot_1_actual_discharge_w | float(0)) - (slot_1_actual_charge_w | float(0)) }}
+    {% elif slot_1_actual_power_stale | bool %}
+      {{ current_target }}
+    {% else %}
+      {{ current_target }}
+    {% endif %}
+  slot_1_reserved_balance_power: >-
+    {% set current_target = slot_1_current_target_w | float(0) %}
+    {% if current_target == 0 %}
+      {{ slot_1_effective_balance_power | float(0) }}
+    {% elif slot_1_target_age_s | float(0) < slot_1_response_grace_s | float(0) %}
+      {{ current_target }}
+    {% else %}
+      {{ slot_1_effective_balance_power | float(0) }}
+    {% endif %}
+  slot_1_has_discharge_actions: "{{ battery_1_discharge_actions | count > 0 }}"
+  slot_1_has_charge_actions: "{{ battery_1_charge_actions | count > 0 }}"
+  slot_1_has_night_charge_actions: "{{ battery_1_night_charge_actions | count > 0 }}"
+  slot_1_discharge_delivery_stalled: >-
+    {% set current_target = slot_1_current_target_w | float(0) %}
+    {% set actual_discharge = slot_1_actual_discharge_w | float(0) %}
+    {% if current_target <= 0
+          or slot_1_target_age_s | float(0) < slot_1_response_grace_s | float(0) %}
+      false
+    {% elif slot_1_actual_power_stale | bool %}
+      false
+    {% elif slot_1_actual_power_usable | bool %}
+      {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
+    {% else %}
+      false
+    {% endif %}
+  slot_1_can_discharge: >-
+    {{ slot_1_used
+       and slot_1_target_entity_configured
+       and battery_1_max_discharge_w | float(0) > 0
+       and slot_1_soc | float(0) >= battery_1_min_discharge_soc_pct | float(0) }}
+  slot_1_can_charge: "{{ slot_1_used and slot_1_target_entity_configured and battery_1_max_charge_w | float(0) > 0 }}"
+  
+  slot_2_used: "{{ battery_2_soc_sensor != '' }}"
+  slot_2_soc: "{{ states(battery_2_soc_sensor) | float(0) if slot_2_used else 0 }}"
+  slot_2_target_entity_configured: "{{ battery_2_target_power_entity != '' }}"
+  slot_2_target_power_state: >-
+    {% if slot_2_target_entity_configured %}
+      {{ states(battery_2_target_power_entity) }}
+    {% else %}
+      0
+    {% endif %}
+  slot_2_target_last_changed_ts: >-
+    {% if slot_2_target_entity_configured %}
+      {% set target_state = states[battery_2_target_power_entity] %}
+      {{ as_timestamp(target_state.last_changed, 0) if target_state is not none else 0 }}
+    {% else %}
+      0
+    {% endif %}
+  slot_2_target_age_s: >-
+    {% if slot_2_target_last_changed_ts | float(0) > 0 %}
+      {{ [run_started_ts | float(0) - (slot_2_target_last_changed_ts | float(0)), 0] | max }}
+    {% else %}
+      0
+    {% endif %}
+  slot_2_response_grace_s: "{{ [20, battery_2_cooldown_seconds | float(0)] | max }}"
+  slot_2_current_target_w: >-
+    {% if slot_2_target_power_state in ['unknown', 'unavailable', 'none', ''] %}
+      0
+    {% else %}
+      {{ slot_2_target_power_state | float(0) }}
+    {% endif %}
+  slot_2_current_target_sign: >-
+    {% if slot_2_current_target_w | float(0) > 0 %}
+      1
+    {% elif slot_2_current_target_w | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  slot_2_actual_power_sensor_configured: "{{ battery_2_actual_power_sensor != '' }}"
+  slot_2_actual_power_state: >-
+    {% if slot_2_actual_power_sensor_configured %}
+      {{ states(battery_2_actual_power_sensor) }}
+    {% else %}
+      0
+    {% endif %}
+  slot_2_actual_power_last_updated_ts: >-
+    {% if slot_2_actual_power_sensor_configured %}
+      {% set actual_state = states[battery_2_actual_power_sensor] %}
+      {{ as_timestamp(actual_state.last_updated, 0) if actual_state is not none else 0 }}
+    {% else %}
+      0
+    {% endif %}
+  slot_2_actual_power_age_s: >-
+    {% if slot_2_actual_power_last_updated_ts | float(0) > 0 %}
+      {{ [run_started_ts | float(0) - (slot_2_actual_power_last_updated_ts | float(0)), 0] | max }}
+    {% else %}
+      999999
+    {% endif %}
+  slot_2_actual_power_w: >-
+    {% if slot_2_actual_power_state in ['unknown', 'unavailable', 'none', ''] %}
+      0
+    {% else %}
+      {{ slot_2_actual_power_state | float(0) }}
+    {% endif %}
+  slot_2_actual_power_valid: "{{ slot_2_actual_power_sensor_configured | bool and is_number(slot_2_actual_power_state) }}"
+  slot_2_actual_discharge_w: "{{ [slot_2_actual_power_w | float(0), 0] | max }}"
+  slot_2_actual_charge_w: "{{ [0 - (slot_2_actual_power_w | float(0)), 0] | max }}"
+  slot_2_actual_power_fresh: >-
+    {% if not (slot_2_actual_power_valid | bool) %}
+      false
+    {% else %}
+      {{ slot_2_actual_power_age_s | float(999999) <= [slot_2_response_grace_s | float(0), 45] | max }}
+    {% endif %}
+  slot_2_actual_power_stale: >-
+    {{ slot_2_actual_power_sensor_configured | bool
+       and (
+         not (slot_2_actual_power_valid | bool)
+         or slot_2_actual_power_age_s | float(999999) > actual_power_stale_timeout_s | float(0)
+       ) }}
+  slot_2_actual_power_usable: >-
+    {{ slot_2_actual_power_valid | bool
+       and not (slot_2_actual_power_stale | bool) }}
+  slot_2_effective_balance_power: >-
+    {% set current_target = slot_2_current_target_w | float(0) %}
+    {% if current_target == 0 %}
+      {% if slot_2_actual_power_usable | bool %}
+        {{ (slot_2_actual_discharge_w | float(0)) - (slot_2_actual_charge_w | float(0)) }}
+      {% else %}
+        0
+      {% endif %}
+    {% elif not (slot_2_actual_power_sensor_configured | bool) %}
+      {{ current_target }}
+    {% elif slot_2_actual_power_usable | bool %}
+      {{ (slot_2_actual_discharge_w | float(0)) - (slot_2_actual_charge_w | float(0)) }}
+    {% elif slot_2_actual_power_stale | bool %}
+      {{ current_target }}
+    {% else %}
+      {{ current_target }}
+    {% endif %}
+  slot_2_reserved_balance_power: >-
+    {% set current_target = slot_2_current_target_w | float(0) %}
+    {% if current_target == 0 %}
+      {{ slot_2_effective_balance_power | float(0) }}
+    {% elif slot_2_target_age_s | float(0) < slot_2_response_grace_s | float(0) %}
+      {{ current_target }}
+    {% else %}
+      {{ slot_2_effective_balance_power | float(0) }}
+    {% endif %}
+  slot_2_has_discharge_actions: "{{ battery_2_discharge_actions | count > 0 }}"
+  slot_2_has_charge_actions: "{{ battery_2_charge_actions | count > 0 }}"
+  slot_2_has_night_charge_actions: "{{ battery_2_night_charge_actions | count > 0 }}"
+  slot_2_discharge_delivery_stalled: >-
+    {% set current_target = slot_2_current_target_w | float(0) %}
+    {% set actual_discharge = slot_2_actual_discharge_w | float(0) %}
+    {% if current_target <= 0
+          or slot_2_target_age_s | float(0) < slot_2_response_grace_s | float(0) %}
+      false
+    {% elif slot_2_actual_power_stale | bool %}
+      false
+    {% elif slot_2_actual_power_usable | bool %}
+      {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
+    {% else %}
+      false
+    {% endif %}
+  slot_2_can_discharge: >-
+    {{ slot_2_used
+       and slot_2_target_entity_configured
+       and battery_2_max_discharge_w | float(0) > 0
+       and slot_2_soc | float(0) >= battery_2_min_discharge_soc_pct | float(0) }}
+  slot_2_can_charge: "{{ slot_2_used and slot_2_target_entity_configured and battery_2_max_charge_w | float(0) > 0 }}"
+  
+  slot_3_used: "{{ battery_3_soc_sensor != '' }}"
+  slot_3_soc: "{{ states(battery_3_soc_sensor) | float(0) if slot_3_used else 0 }}"
+  slot_3_target_entity_configured: "{{ battery_3_target_power_entity != '' }}"
+  slot_3_target_power_state: >-
+    {% if slot_3_target_entity_configured %}
+      {{ states(battery_3_target_power_entity) }}
+    {% else %}
+      0
+    {% endif %}
+  slot_3_target_last_changed_ts: >-
+    {% if slot_3_target_entity_configured %}
+      {% set target_state = states[battery_3_target_power_entity] %}
+      {{ as_timestamp(target_state.last_changed, 0) if target_state is not none else 0 }}
+    {% else %}
+      0
+    {% endif %}
+  slot_3_target_age_s: >-
+    {% if slot_3_target_last_changed_ts | float(0) > 0 %}
+      {{ [run_started_ts | float(0) - (slot_3_target_last_changed_ts | float(0)), 0] | max }}
+    {% else %}
+      0
+    {% endif %}
+  slot_3_response_grace_s: "{{ [20, battery_3_cooldown_seconds | float(0)] | max }}"
+  slot_3_current_target_w: >-
+    {% if slot_3_target_power_state in ['unknown', 'unavailable', 'none', ''] %}
+      0
+    {% else %}
+      {{ slot_3_target_power_state | float(0) }}
+    {% endif %}
+  slot_3_current_target_sign: >-
+    {% if slot_3_current_target_w | float(0) > 0 %}
+      1
+    {% elif slot_3_current_target_w | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  slot_3_actual_power_sensor_configured: "{{ battery_3_actual_power_sensor != '' }}"
+  slot_3_actual_power_state: >-
+    {% if slot_3_actual_power_sensor_configured %}
+      {{ states(battery_3_actual_power_sensor) }}
+    {% else %}
+      0
+    {% endif %}
+  slot_3_actual_power_last_updated_ts: >-
+    {% if slot_3_actual_power_sensor_configured %}
+      {% set actual_state = states[battery_3_actual_power_sensor] %}
+      {{ as_timestamp(actual_state.last_updated, 0) if actual_state is not none else 0 }}
+    {% else %}
+      0
+    {% endif %}
+  slot_3_actual_power_age_s: >-
+    {% if slot_3_actual_power_last_updated_ts | float(0) > 0 %}
+      {{ [run_started_ts | float(0) - (slot_3_actual_power_last_updated_ts | float(0)), 0] | max }}
+    {% else %}
+      999999
+    {% endif %}
+  slot_3_actual_power_w: >-
+    {% if slot_3_actual_power_state in ['unknown', 'unavailable', 'none', ''] %}
+      0
+    {% else %}
+      {{ slot_3_actual_power_state | float(0) }}
+    {% endif %}
+  slot_3_actual_power_valid: "{{ slot_3_actual_power_sensor_configured | bool and is_number(slot_3_actual_power_state) }}"
+  slot_3_actual_discharge_w: "{{ [slot_3_actual_power_w | float(0), 0] | max }}"
+  slot_3_actual_charge_w: "{{ [0 - (slot_3_actual_power_w | float(0)), 0] | max }}"
+  slot_3_actual_power_fresh: >-
+    {% if not (slot_3_actual_power_valid | bool) %}
+      false
+    {% else %}
+      {{ slot_3_actual_power_age_s | float(999999) <= [slot_3_response_grace_s | float(0), 45] | max }}
+    {% endif %}
+  slot_3_actual_power_stale: >-
+    {{ slot_3_actual_power_sensor_configured | bool
+       and (
+         not (slot_3_actual_power_valid | bool)
+         or slot_3_actual_power_age_s | float(999999) > actual_power_stale_timeout_s | float(0)
+       ) }}
+  slot_3_actual_power_usable: >-
+    {{ slot_3_actual_power_valid | bool
+       and not (slot_3_actual_power_stale | bool) }}
+  slot_3_effective_balance_power: >-
+    {% set current_target = slot_3_current_target_w | float(0) %}
+    {% if current_target == 0 %}
+      {% if slot_3_actual_power_usable | bool %}
+        {{ (slot_3_actual_discharge_w | float(0)) - (slot_3_actual_charge_w | float(0)) }}
+      {% else %}
+        0
+      {% endif %}
+    {% elif not (slot_3_actual_power_sensor_configured | bool) %}
+      {{ current_target }}
+    {% elif slot_3_actual_power_usable | bool %}
+      {{ (slot_3_actual_discharge_w | float(0)) - (slot_3_actual_charge_w | float(0)) }}
+    {% elif slot_3_actual_power_stale | bool %}
+      {{ current_target }}
+    {% else %}
+      {{ current_target }}
+    {% endif %}
+  slot_3_reserved_balance_power: >-
+    {% set current_target = slot_3_current_target_w | float(0) %}
+    {% if current_target == 0 %}
+      {{ slot_3_effective_balance_power | float(0) }}
+    {% elif slot_3_target_age_s | float(0) < slot_3_response_grace_s | float(0) %}
+      {{ current_target }}
+    {% else %}
+      {{ slot_3_effective_balance_power | float(0) }}
+    {% endif %}
+  slot_3_has_discharge_actions: "{{ battery_3_discharge_actions | count > 0 }}"
+  slot_3_has_charge_actions: "{{ battery_3_charge_actions | count > 0 }}"
+  slot_3_has_night_charge_actions: "{{ battery_3_night_charge_actions | count > 0 }}"
+  slot_3_discharge_delivery_stalled: >-
+    {% set current_target = slot_3_current_target_w | float(0) %}
+    {% set actual_discharge = slot_3_actual_discharge_w | float(0) %}
+    {% if current_target <= 0
+          or slot_3_target_age_s | float(0) < slot_3_response_grace_s | float(0) %}
+      false
+    {% elif slot_3_actual_power_stale | bool %}
+      false
+    {% elif slot_3_actual_power_usable | bool %}
+      {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
+    {% else %}
+      false
+    {% endif %}
+  slot_3_can_discharge: >-
+    {{ slot_3_used
+       and slot_3_target_entity_configured
+       and battery_3_max_discharge_w | float(0) > 0
+       and slot_3_soc | float(0) >= battery_3_min_discharge_soc_pct | float(0) }}
+  slot_3_can_charge: "{{ slot_3_used and slot_3_target_entity_configured and battery_3_max_charge_w | float(0) > 0 }}"
+  
+  slot_4_used: "{{ battery_4_soc_sensor != '' }}"
+  slot_4_soc: "{{ states(battery_4_soc_sensor) | float(0) if slot_4_used else 0 }}"
+  slot_4_target_entity_configured: "{{ battery_4_target_power_entity != '' }}"
+  slot_4_target_power_state: >-
+    {% if slot_4_target_entity_configured %}
+      {{ states(battery_4_target_power_entity) }}
+    {% else %}
+      0
+    {% endif %}
+  slot_4_target_last_changed_ts: >-
+    {% if slot_4_target_entity_configured %}
+      {% set target_state = states[battery_4_target_power_entity] %}
+      {{ as_timestamp(target_state.last_changed, 0) if target_state is not none else 0 }}
+    {% else %}
+      0
+    {% endif %}
+  slot_4_target_age_s: >-
+    {% if slot_4_target_last_changed_ts | float(0) > 0 %}
+      {{ [run_started_ts | float(0) - (slot_4_target_last_changed_ts | float(0)), 0] | max }}
+    {% else %}
+      0
+    {% endif %}
+  slot_4_response_grace_s: "{{ [20, battery_4_cooldown_seconds | float(0)] | max }}"
+  slot_4_current_target_w: >-
+    {% if slot_4_target_power_state in ['unknown', 'unavailable', 'none', ''] %}
+      0
+    {% else %}
+      {{ slot_4_target_power_state | float(0) }}
+    {% endif %}
+  slot_4_current_target_sign: >-
+    {% if slot_4_current_target_w | float(0) > 0 %}
+      1
+    {% elif slot_4_current_target_w | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  slot_4_actual_power_sensor_configured: "{{ battery_4_actual_power_sensor != '' }}"
+  slot_4_actual_power_state: >-
+    {% if slot_4_actual_power_sensor_configured %}
+      {{ states(battery_4_actual_power_sensor) }}
+    {% else %}
+      0
+    {% endif %}
+  slot_4_actual_power_last_updated_ts: >-
+    {% if slot_4_actual_power_sensor_configured %}
+      {% set actual_state = states[battery_4_actual_power_sensor] %}
+      {{ as_timestamp(actual_state.last_updated, 0) if actual_state is not none else 0 }}
+    {% else %}
+      0
+    {% endif %}
+  slot_4_actual_power_age_s: >-
+    {% if slot_4_actual_power_last_updated_ts | float(0) > 0 %}
+      {{ [run_started_ts | float(0) - (slot_4_actual_power_last_updated_ts | float(0)), 0] | max }}
+    {% else %}
+      999999
+    {% endif %}
+  slot_4_actual_power_w: >-
+    {% if slot_4_actual_power_state in ['unknown', 'unavailable', 'none', ''] %}
+      0
+    {% else %}
+      {{ slot_4_actual_power_state | float(0) }}
+    {% endif %}
+  slot_4_actual_power_valid: "{{ slot_4_actual_power_sensor_configured | bool and is_number(slot_4_actual_power_state) }}"
+  slot_4_actual_discharge_w: "{{ [slot_4_actual_power_w | float(0), 0] | max }}"
+  slot_4_actual_charge_w: "{{ [0 - (slot_4_actual_power_w | float(0)), 0] | max }}"
+  slot_4_actual_power_fresh: >-
+    {% if not (slot_4_actual_power_valid | bool) %}
+      false
+    {% else %}
+      {{ slot_4_actual_power_age_s | float(999999) <= [slot_4_response_grace_s | float(0), 45] | max }}
+    {% endif %}
+  slot_4_actual_power_stale: >-
+    {{ slot_4_actual_power_sensor_configured | bool
+       and (
+         not (slot_4_actual_power_valid | bool)
+         or slot_4_actual_power_age_s | float(999999) > actual_power_stale_timeout_s | float(0)
+       ) }}
+  slot_4_actual_power_usable: >-
+    {{ slot_4_actual_power_valid | bool
+       and not (slot_4_actual_power_stale | bool) }}
+  slot_4_effective_balance_power: >-
+    {% set current_target = slot_4_current_target_w | float(0) %}
+    {% if current_target == 0 %}
+      {% if slot_4_actual_power_usable | bool %}
+        {{ (slot_4_actual_discharge_w | float(0)) - (slot_4_actual_charge_w | float(0)) }}
+      {% else %}
+        0
+      {% endif %}
+    {% elif not (slot_4_actual_power_sensor_configured | bool) %}
+      {{ current_target }}
+    {% elif slot_4_actual_power_usable | bool %}
+      {{ (slot_4_actual_discharge_w | float(0)) - (slot_4_actual_charge_w | float(0)) }}
+    {% elif slot_4_actual_power_stale | bool %}
+      {{ current_target }}
+    {% else %}
+      {{ current_target }}
+    {% endif %}
+  slot_4_reserved_balance_power: >-
+    {% set current_target = slot_4_current_target_w | float(0) %}
+    {% if current_target == 0 %}
+      {{ slot_4_effective_balance_power | float(0) }}
+    {% elif slot_4_target_age_s | float(0) < slot_4_response_grace_s | float(0) %}
+      {{ current_target }}
+    {% else %}
+      {{ slot_4_effective_balance_power | float(0) }}
+    {% endif %}
+  slot_4_has_discharge_actions: "{{ battery_4_discharge_actions | count > 0 }}"
+  slot_4_has_charge_actions: "{{ battery_4_charge_actions | count > 0 }}"
+  slot_4_has_night_charge_actions: "{{ battery_4_night_charge_actions | count > 0 }}"
+  slot_4_discharge_delivery_stalled: >-
+    {% set current_target = slot_4_current_target_w | float(0) %}
+    {% set actual_discharge = slot_4_actual_discharge_w | float(0) %}
+    {% if current_target <= 0
+          or slot_4_target_age_s | float(0) < slot_4_response_grace_s | float(0) %}
+      false
+    {% elif slot_4_actual_power_stale | bool %}
+      false
+    {% elif slot_4_actual_power_usable | bool %}
+      {{ actual_discharge <= 50 and (current_target - actual_discharge) > 50 }}
+    {% else %}
+      false
+    {% endif %}
+  slot_4_can_discharge: >-
+    {{ slot_4_used
+       and slot_4_target_entity_configured
+       and battery_4_max_discharge_w | float(0) > 0
+       and slot_4_soc | float(0) >= battery_4_min_discharge_soc_pct | float(0) }}
+  slot_4_can_charge: "{{ slot_4_used and slot_4_target_entity_configured and battery_4_max_charge_w | float(0) > 0 }}"
+
+  off_peak_active: >-
+    {% set entities = expand(off_peak_entities) %}
+    {{ entities | selectattr('state', 'eq', 'on') | list | count > 0 }}
+
+  # Rebuild the underlying house demand from the net house meter plus the
+  # managed battery contribution. Long-cooldown batteries keep stable active
+  # targets; short-cooldown batteries take the residual and absorb reductions.
+  managed_battery_power_w: >-
+    {{
+      (slot_1_effective_balance_power | float(0))
+      + (slot_2_effective_balance_power | float(0))
+      + (slot_3_effective_balance_power | float(0))
+      + (slot_4_effective_balance_power | float(0))
+    }}
+  uncommanded_actual_discharge_w: >-
+    {{
+      (slot_1_actual_discharge_w | float(0) if (not slot_1_can_discharge | bool or (slot_1_discharge_delivery_stalled | bool and slot_1_current_target_w | float(0) <= 0)) and slot_1_actual_power_usable | bool else 0)
+      + (slot_2_actual_discharge_w | float(0) if (not slot_2_can_discharge | bool or (slot_2_discharge_delivery_stalled | bool and slot_2_current_target_w | float(0) <= 0)) and slot_2_actual_power_usable | bool else 0)
+      + (slot_3_actual_discharge_w | float(0) if (not slot_3_can_discharge | bool or (slot_3_discharge_delivery_stalled | bool and slot_3_current_target_w | float(0) <= 0)) and slot_3_actual_power_usable | bool else 0)
+      + (slot_4_actual_discharge_w | float(0) if (not slot_4_can_discharge | bool or (slot_4_discharge_delivery_stalled | bool and slot_4_current_target_w | float(0) <= 0)) and slot_4_actual_power_usable | bool else 0)
+    }}
+  uncommanded_actual_charge_w: >-
+    {{
+      (slot_1_actual_charge_w | float(0) if not slot_1_can_charge | bool and slot_1_actual_power_usable | bool else 0)
+      + (slot_2_actual_charge_w | float(0) if not slot_2_can_charge | bool and slot_2_actual_power_usable | bool else 0)
+      + (slot_3_actual_charge_w | float(0) if not slot_3_can_charge | bool and slot_3_actual_power_usable | bool else 0)
+      + (slot_4_actual_charge_w | float(0) if not slot_4_can_charge | bool and slot_4_actual_power_usable | bool else 0)
+    }}
+  raw_export_w: "{{ [0 - house_power_w, 0] | max if house_power_valid else 0 }}"
+  discharge_export_guard_w: >-
+    {% if not house_power_valid %}
+      0
+    {% elif raw_export_w | float(0) <= control_deadband_w | float(0) %}
+      0
+    {% else %}
+      {{ (raw_export_w | float(0)) - (control_deadband_w | float(0)) }}
+    {% endif %}
+  discharge_export_guard_active: "{{ discharge_export_guard_w | float(0) > 0 }}"
+  adjusted_house_power_w: >-
+    {% if house_power_valid %}
+      {{ (house_power_w | float(0)) + (managed_battery_power_w | float(0)) }}
+    {% else %}
+      0
+    {% endif %}
+  import_need_w: "{{ [adjusted_house_power_w, 0] | max if house_power_valid else 0 }}"
+  export_surplus_w: "{{ [0 - adjusted_house_power_w, 0] | max if house_power_valid else 0 }}"
+  discharge_increase_budget_w: >-
+    {% if not house_power_valid %}
+      0
+    {% elif house_power_w | float(0) >= strong_import_threshold_w | float(0) %}
+      {{ (house_power_w | float(0)) * (strong_import_discharge_budget_share_pct | float(0)) / 100 }}
+    {% else %}
+      {{ [house_power_w | float(0) - control_deadband_w | float(0), 0] | max }}
+    {% endif %}
+
+  # Generated validation catches missing target entities and zero power limits
+  # before any target update or custom action is executed.
+  validation_errors: >-
+    {% set ns = namespace(errors=[]) %}
+    {% if slot_1_used %}
+      {% set has_target_entity = slot_1_target_entity_configured | bool %}
+      {% set discharge_power_enabled = battery_1_max_discharge_w | float(0) > 0 %}
+      {% set charge_power_enabled = battery_1_max_charge_w | float(0) > 0 %}
+      {% if not has_target_entity %}
+        {% set error_text -%}
+          Battery 1 is enabled by its state of charge sensor, but no Target power entity is configured. Add a `number` or `input_number` entity, or clear the state of charge sensor to disable this battery slot.
+        {%- endset %}
+        {% set ns.errors = ns.errors + [error_text | trim] %}
+      {% elif not (discharge_power_enabled or charge_power_enabled) %}
+        {% set error_text -%}
+          Battery 1 has a target power entity configured, but both maximum power limits are set to 0 W. Set a non-zero Maximum discharge power or Maximum charge power to make this slot usable.
+        {%- endset %}
+        {% set ns.errors = ns.errors + [error_text | trim] %}
+      {% endif %}
+    {% endif %}
+    
+    {% if slot_2_used %}
+      {% set has_target_entity = slot_2_target_entity_configured | bool %}
+      {% set discharge_power_enabled = battery_2_max_discharge_w | float(0) > 0 %}
+      {% set charge_power_enabled = battery_2_max_charge_w | float(0) > 0 %}
+      {% if not has_target_entity %}
+        {% set error_text -%}
+          Battery 2 is enabled by its state of charge sensor, but no Target power entity is configured. Add a `number` or `input_number` entity, or clear the state of charge sensor to disable this battery slot.
+        {%- endset %}
+        {% set ns.errors = ns.errors + [error_text | trim] %}
+      {% elif not (discharge_power_enabled or charge_power_enabled) %}
+        {% set error_text -%}
+          Battery 2 has a target power entity configured, but both maximum power limits are set to 0 W. Set a non-zero Maximum discharge power or Maximum charge power to make this slot usable.
+        {%- endset %}
+        {% set ns.errors = ns.errors + [error_text | trim] %}
+      {% endif %}
+    {% endif %}
+    
+    {% if slot_3_used %}
+      {% set has_target_entity = slot_3_target_entity_configured | bool %}
+      {% set discharge_power_enabled = battery_3_max_discharge_w | float(0) > 0 %}
+      {% set charge_power_enabled = battery_3_max_charge_w | float(0) > 0 %}
+      {% if not has_target_entity %}
+        {% set error_text -%}
+          Battery 3 is enabled by its state of charge sensor, but no Target power entity is configured. Add a `number` or `input_number` entity, or clear the state of charge sensor to disable this battery slot.
+        {%- endset %}
+        {% set ns.errors = ns.errors + [error_text | trim] %}
+      {% elif not (discharge_power_enabled or charge_power_enabled) %}
+        {% set error_text -%}
+          Battery 3 has a target power entity configured, but both maximum power limits are set to 0 W. Set a non-zero Maximum discharge power or Maximum charge power to make this slot usable.
+        {%- endset %}
+        {% set ns.errors = ns.errors + [error_text | trim] %}
+      {% endif %}
+    {% endif %}
+    
+    {% if slot_4_used %}
+      {% set has_target_entity = slot_4_target_entity_configured | bool %}
+      {% set discharge_power_enabled = battery_4_max_discharge_w | float(0) > 0 %}
+      {% set charge_power_enabled = battery_4_max_charge_w | float(0) > 0 %}
+      {% if not has_target_entity %}
+        {% set error_text -%}
+          Battery 4 is enabled by its state of charge sensor, but no Target power entity is configured. Add a `number` or `input_number` entity, or clear the state of charge sensor to disable this battery slot.
+        {%- endset %}
+        {% set ns.errors = ns.errors + [error_text | trim] %}
+      {% elif not (discharge_power_enabled or charge_power_enabled) %}
+        {% set error_text -%}
+          Battery 4 has a target power entity configured, but both maximum power limits are set to 0 W. Set a non-zero Maximum discharge power or Maximum charge power to make this slot usable.
+        {%- endset %}
+        {% set ns.errors = ns.errors + [error_text | trim] %}
+      {% endif %}
+    {% endif %}
+    {{ ns.errors }}
+
+  # Cooldown state must be available before building the battery list so
+  # allocation can reserve locked output and redistribute only the remainder.
+  slot_1_cooldown_elapsed: >-
+    {% if battery_1_cooldown_seconds | float(0) <= 0 %}
+      true
+    {% elif slot_1_target_last_changed_ts | float(0) <= 0 %}
+      true
+    {% else %}
+      {{ run_started_ts | float(0) - (slot_1_target_last_changed_ts | float(0)) >= battery_1_cooldown_seconds | float(0) }}
+    {% endif %}
+  discharge_cooldown_ok_1: >-
+    {{ (slot_1_can_discharge | bool) and (slot_1_cooldown_elapsed | bool) }}
+  charge_cooldown_ok_1: >-
+    {{ (slot_1_can_charge | bool) and (slot_1_cooldown_elapsed | bool) }}
+  
+  slot_2_cooldown_elapsed: >-
+    {% if battery_2_cooldown_seconds | float(0) <= 0 %}
+      true
+    {% elif slot_2_target_last_changed_ts | float(0) <= 0 %}
+      true
+    {% else %}
+      {{ run_started_ts | float(0) - (slot_2_target_last_changed_ts | float(0)) >= battery_2_cooldown_seconds | float(0) }}
+    {% endif %}
+  discharge_cooldown_ok_2: >-
+    {{ (slot_2_can_discharge | bool) and (slot_2_cooldown_elapsed | bool) }}
+  charge_cooldown_ok_2: >-
+    {{ (slot_2_can_charge | bool) and (slot_2_cooldown_elapsed | bool) }}
+  
+  slot_3_cooldown_elapsed: >-
+    {% if battery_3_cooldown_seconds | float(0) <= 0 %}
+      true
+    {% elif slot_3_target_last_changed_ts | float(0) <= 0 %}
+      true
+    {% else %}
+      {{ run_started_ts | float(0) - (slot_3_target_last_changed_ts | float(0)) >= battery_3_cooldown_seconds | float(0) }}
+    {% endif %}
+  discharge_cooldown_ok_3: >-
+    {{ (slot_3_can_discharge | bool) and (slot_3_cooldown_elapsed | bool) }}
+  charge_cooldown_ok_3: >-
+    {{ (slot_3_can_charge | bool) and (slot_3_cooldown_elapsed | bool) }}
+  
+  slot_4_cooldown_elapsed: >-
+    {% if battery_4_cooldown_seconds | float(0) <= 0 %}
+      true
+    {% elif slot_4_target_last_changed_ts | float(0) <= 0 %}
+      true
+    {% else %}
+      {{ run_started_ts | float(0) - (slot_4_target_last_changed_ts | float(0)) >= battery_4_cooldown_seconds | float(0) }}
+    {% endif %}
+  discharge_cooldown_ok_4: >-
+    {{ (slot_4_can_discharge | bool) and (slot_4_cooldown_elapsed | bool) }}
+  charge_cooldown_ok_4: >-
+    {{ (slot_4_can_charge | bool) and (slot_4_cooldown_elapsed | bool) }}
+
+  batteries: >-
+    {% set ns = namespace(items=[]) %}
+    {% if slot_1_used %}
+      {% set current_target = slot_1_current_target_w | float(0) %}
+      {% if battery_1_target_power_uses_absolute_value | bool and off_peak_active | bool %}
+        {% set commanded_discharge = 0 %}
+        {% set commanded_charge = [current_target, 0] | max %}
+        {% set reserved_discharge = 0 %}
+        {% set reserved_charge = [current_target, 0] | max %}
+      {% else %}
+        {% set commanded_discharge = [current_target, 0] | max %}
+        {% set commanded_charge = [0 - current_target, 0] | max %}
+        {% set reserved_balance_power = slot_1_reserved_balance_power | float(0) %}
+        {% set reserved_discharge = [reserved_balance_power, 0] | max %}
+        {% set reserved_charge = [0 - reserved_balance_power, 0] | max %}
+      {% endif %}
+      {% set commanded_discharge = [commanded_discharge, battery_1_max_discharge_w | float(0)] | min %}
+      {% set commanded_charge = [commanded_charge, battery_1_max_charge_w | float(0)] | min %}
+      {% set reserved_discharge = [reserved_discharge, battery_1_max_discharge_w | float(0)] | min %}
+      {% set reserved_charge = [reserved_charge, battery_1_max_charge_w | float(0)] | min %}
+      {% set ns.items = ns.items + [{
+        'slot': 1,
+        'soc': slot_1_soc | float(0),
+        'headroom_priority': slot_1_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
+        'cooldown_s': battery_1_cooldown_seconds | float(0),
+        'responsive': battery_1_reactive | bool,
+        'current_target': current_target,
+        'max_discharge': battery_1_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_1_min_discharge_soc_pct | float(0),
+        'max_charge': battery_1_max_charge_w | float(0),
+        'can_discharge': slot_1_can_discharge | bool,
+        'discharge_available': (slot_1_can_discharge | bool) and not (slot_1_discharge_delivery_stalled | bool),
+        'soft_low_soc_priority': (slot_1_can_discharge | bool) and not (slot_1_discharge_delivery_stalled | bool) and slot_1_soc | float(0) <= battery_1_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
+        'can_charge': slot_1_can_charge | bool,
+        'commanded_discharge': commanded_discharge,
+        'commanded_charge': commanded_charge,
+        'current_discharge': reserved_discharge,
+        'current_charge': reserved_charge,
+        'actual_power_fresh': slot_1_actual_power_fresh | bool,
+        'actual_power_stale': slot_1_actual_power_stale | bool,
+        'actual_power_usable': slot_1_actual_power_usable | bool,
+        'actual_discharge': slot_1_actual_discharge_w | float(0),
+        'target_age_s': slot_1_target_age_s | float(0),
+        'response_grace_s': slot_1_response_grace_s | float(0),
+        'discharge_delivery_stalled': slot_1_discharge_delivery_stalled | bool,
+        'discharge_locked': slot_1_can_discharge and not (battery_1_target_power_uses_absolute_value | bool and off_peak_active | bool) and not (slot_1_discharge_delivery_stalled | bool) and current_target > 0 and not (discharge_cooldown_ok_1 | bool),
+        'charge_locked': slot_1_can_charge and (current_target < 0 or (battery_1_target_power_uses_absolute_value | bool and off_peak_active | bool and current_target > 0)) and not (charge_cooldown_ok_1 | bool)
+      }] %}
+    {% endif %}
+    
+    {% if slot_2_used %}
+      {% set current_target = slot_2_current_target_w | float(0) %}
+      {% if battery_2_target_power_uses_absolute_value | bool and off_peak_active | bool %}
+        {% set commanded_discharge = 0 %}
+        {% set commanded_charge = [current_target, 0] | max %}
+        {% set reserved_discharge = 0 %}
+        {% set reserved_charge = [current_target, 0] | max %}
+      {% else %}
+        {% set commanded_discharge = [current_target, 0] | max %}
+        {% set commanded_charge = [0 - current_target, 0] | max %}
+        {% set reserved_balance_power = slot_2_reserved_balance_power | float(0) %}
+        {% set reserved_discharge = [reserved_balance_power, 0] | max %}
+        {% set reserved_charge = [0 - reserved_balance_power, 0] | max %}
+      {% endif %}
+      {% set commanded_discharge = [commanded_discharge, battery_2_max_discharge_w | float(0)] | min %}
+      {% set commanded_charge = [commanded_charge, battery_2_max_charge_w | float(0)] | min %}
+      {% set reserved_discharge = [reserved_discharge, battery_2_max_discharge_w | float(0)] | min %}
+      {% set reserved_charge = [reserved_charge, battery_2_max_charge_w | float(0)] | min %}
+      {% set ns.items = ns.items + [{
+        'slot': 2,
+        'soc': slot_2_soc | float(0),
+        'headroom_priority': slot_2_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
+        'cooldown_s': battery_2_cooldown_seconds | float(0),
+        'responsive': battery_2_reactive | bool,
+        'current_target': current_target,
+        'max_discharge': battery_2_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_2_min_discharge_soc_pct | float(0),
+        'max_charge': battery_2_max_charge_w | float(0),
+        'can_discharge': slot_2_can_discharge | bool,
+        'discharge_available': (slot_2_can_discharge | bool) and not (slot_2_discharge_delivery_stalled | bool),
+        'soft_low_soc_priority': (slot_2_can_discharge | bool) and not (slot_2_discharge_delivery_stalled | bool) and slot_2_soc | float(0) <= battery_2_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
+        'can_charge': slot_2_can_charge | bool,
+        'commanded_discharge': commanded_discharge,
+        'commanded_charge': commanded_charge,
+        'current_discharge': reserved_discharge,
+        'current_charge': reserved_charge,
+        'actual_power_fresh': slot_2_actual_power_fresh | bool,
+        'actual_power_stale': slot_2_actual_power_stale | bool,
+        'actual_power_usable': slot_2_actual_power_usable | bool,
+        'actual_discharge': slot_2_actual_discharge_w | float(0),
+        'target_age_s': slot_2_target_age_s | float(0),
+        'response_grace_s': slot_2_response_grace_s | float(0),
+        'discharge_delivery_stalled': slot_2_discharge_delivery_stalled | bool,
+        'discharge_locked': slot_2_can_discharge and not (battery_2_target_power_uses_absolute_value | bool and off_peak_active | bool) and not (slot_2_discharge_delivery_stalled | bool) and current_target > 0 and not (discharge_cooldown_ok_2 | bool),
+        'charge_locked': slot_2_can_charge and (current_target < 0 or (battery_2_target_power_uses_absolute_value | bool and off_peak_active | bool and current_target > 0)) and not (charge_cooldown_ok_2 | bool)
+      }] %}
+    {% endif %}
+    
+    {% if slot_3_used %}
+      {% set current_target = slot_3_current_target_w | float(0) %}
+      {% if battery_3_target_power_uses_absolute_value | bool and off_peak_active | bool %}
+        {% set commanded_discharge = 0 %}
+        {% set commanded_charge = [current_target, 0] | max %}
+        {% set reserved_discharge = 0 %}
+        {% set reserved_charge = [current_target, 0] | max %}
+      {% else %}
+        {% set commanded_discharge = [current_target, 0] | max %}
+        {% set commanded_charge = [0 - current_target, 0] | max %}
+        {% set reserved_balance_power = slot_3_reserved_balance_power | float(0) %}
+        {% set reserved_discharge = [reserved_balance_power, 0] | max %}
+        {% set reserved_charge = [0 - reserved_balance_power, 0] | max %}
+      {% endif %}
+      {% set commanded_discharge = [commanded_discharge, battery_3_max_discharge_w | float(0)] | min %}
+      {% set commanded_charge = [commanded_charge, battery_3_max_charge_w | float(0)] | min %}
+      {% set reserved_discharge = [reserved_discharge, battery_3_max_discharge_w | float(0)] | min %}
+      {% set reserved_charge = [reserved_charge, battery_3_max_charge_w | float(0)] | min %}
+      {% set ns.items = ns.items + [{
+        'slot': 3,
+        'soc': slot_3_soc | float(0),
+        'headroom_priority': slot_3_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
+        'cooldown_s': battery_3_cooldown_seconds | float(0),
+        'responsive': battery_3_reactive | bool,
+        'current_target': current_target,
+        'max_discharge': battery_3_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_3_min_discharge_soc_pct | float(0),
+        'max_charge': battery_3_max_charge_w | float(0),
+        'can_discharge': slot_3_can_discharge | bool,
+        'discharge_available': (slot_3_can_discharge | bool) and not (slot_3_discharge_delivery_stalled | bool),
+        'soft_low_soc_priority': (slot_3_can_discharge | bool) and not (slot_3_discharge_delivery_stalled | bool) and slot_3_soc | float(0) <= battery_3_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
+        'can_charge': slot_3_can_charge | bool,
+        'commanded_discharge': commanded_discharge,
+        'commanded_charge': commanded_charge,
+        'current_discharge': reserved_discharge,
+        'current_charge': reserved_charge,
+        'actual_power_fresh': slot_3_actual_power_fresh | bool,
+        'actual_power_stale': slot_3_actual_power_stale | bool,
+        'actual_power_usable': slot_3_actual_power_usable | bool,
+        'actual_discharge': slot_3_actual_discharge_w | float(0),
+        'target_age_s': slot_3_target_age_s | float(0),
+        'response_grace_s': slot_3_response_grace_s | float(0),
+        'discharge_delivery_stalled': slot_3_discharge_delivery_stalled | bool,
+        'discharge_locked': slot_3_can_discharge and not (battery_3_target_power_uses_absolute_value | bool and off_peak_active | bool) and not (slot_3_discharge_delivery_stalled | bool) and current_target > 0 and not (discharge_cooldown_ok_3 | bool),
+        'charge_locked': slot_3_can_charge and (current_target < 0 or (battery_3_target_power_uses_absolute_value | bool and off_peak_active | bool and current_target > 0)) and not (charge_cooldown_ok_3 | bool)
+      }] %}
+    {% endif %}
+    
+    {% if slot_4_used %}
+      {% set current_target = slot_4_current_target_w | float(0) %}
+      {% if battery_4_target_power_uses_absolute_value | bool and off_peak_active | bool %}
+        {% set commanded_discharge = 0 %}
+        {% set commanded_charge = [current_target, 0] | max %}
+        {% set reserved_discharge = 0 %}
+        {% set reserved_charge = [current_target, 0] | max %}
+      {% else %}
+        {% set commanded_discharge = [current_target, 0] | max %}
+        {% set commanded_charge = [0 - current_target, 0] | max %}
+        {% set reserved_balance_power = slot_4_reserved_balance_power | float(0) %}
+        {% set reserved_discharge = [reserved_balance_power, 0] | max %}
+        {% set reserved_charge = [0 - reserved_balance_power, 0] | max %}
+      {% endif %}
+      {% set commanded_discharge = [commanded_discharge, battery_4_max_discharge_w | float(0)] | min %}
+      {% set commanded_charge = [commanded_charge, battery_4_max_charge_w | float(0)] | min %}
+      {% set reserved_discharge = [reserved_discharge, battery_4_max_discharge_w | float(0)] | min %}
+      {% set reserved_charge = [reserved_charge, battery_4_max_charge_w | float(0)] | min %}
+      {% set ns.items = ns.items + [{
+        'slot': 4,
+        'soc': slot_4_soc | float(0),
+        'headroom_priority': slot_4_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
+        'cooldown_s': battery_4_cooldown_seconds | float(0),
+        'responsive': battery_4_reactive | bool,
+        'current_target': current_target,
+        'max_discharge': battery_4_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_4_min_discharge_soc_pct | float(0),
+        'max_charge': battery_4_max_charge_w | float(0),
+        'can_discharge': slot_4_can_discharge | bool,
+        'discharge_available': (slot_4_can_discharge | bool) and not (slot_4_discharge_delivery_stalled | bool),
+        'soft_low_soc_priority': (slot_4_can_discharge | bool) and not (slot_4_discharge_delivery_stalled | bool) and slot_4_soc | float(0) <= battery_4_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
+        'can_charge': slot_4_can_charge | bool,
+        'commanded_discharge': commanded_discharge,
+        'commanded_charge': commanded_charge,
+        'current_discharge': reserved_discharge,
+        'current_charge': reserved_charge,
+        'actual_power_fresh': slot_4_actual_power_fresh | bool,
+        'actual_power_stale': slot_4_actual_power_stale | bool,
+        'actual_power_usable': slot_4_actual_power_usable | bool,
+        'actual_discharge': slot_4_actual_discharge_w | float(0),
+        'target_age_s': slot_4_target_age_s | float(0),
+        'response_grace_s': slot_4_response_grace_s | float(0),
+        'discharge_delivery_stalled': slot_4_discharge_delivery_stalled | bool,
+        'discharge_locked': slot_4_can_discharge and not (battery_4_target_power_uses_absolute_value | bool and off_peak_active | bool) and not (slot_4_discharge_delivery_stalled | bool) and current_target > 0 and not (discharge_cooldown_ok_4 | bool),
+        'charge_locked': slot_4_can_charge and (current_target < 0 or (battery_4_target_power_uses_absolute_value | bool and off_peak_active | bool and current_target > 0)) and not (charge_cooldown_ok_4 | bool)
+      }] %}
+    {% endif %}
+    {{ ns.items }}
+  discharge_capable_count: "{{ slot_1_can_discharge | int(0) + slot_2_can_discharge | int(0) + slot_3_can_discharge | int(0) + slot_4_can_discharge | int(0) }}"
+  charge_capable_count: "{{ slot_1_can_charge | int(0) + slot_2_can_charge | int(0) + slot_3_can_charge | int(0) + slot_4_can_charge | int(0) }}"
+  current_total_charge_w: >-
+    {{
+      (0 - (slot_1_current_target_w | float(0)) if slot_1_current_target_w | float(0) < 0 else 0)
+      + (0 - (slot_2_current_target_w | float(0)) if slot_2_current_target_w | float(0) < 0 else 0)
+      + (0 - (slot_3_current_target_w | float(0)) if slot_3_current_target_w | float(0) < 0 else 0)
+      + (0 - (slot_4_current_target_w | float(0)) if slot_4_current_target_w | float(0) < 0 else 0)
+      + (slot_1_current_target_w | float(0) if off_peak_active | bool and battery_1_target_power_uses_absolute_value | bool and slot_1_current_target_w | float(0) > 0 else 0)
+      + (slot_2_current_target_w | float(0) if off_peak_active | bool and battery_2_target_power_uses_absolute_value | bool and slot_2_current_target_w | float(0) > 0 else 0)
+      + (slot_3_current_target_w | float(0) if off_peak_active | bool and battery_3_target_power_uses_absolute_value | bool and slot_3_current_target_w | float(0) > 0 else 0)
+      + (slot_4_current_target_w | float(0) if off_peak_active | bool and battery_4_target_power_uses_absolute_value | bool and slot_4_current_target_w | float(0) > 0 else 0)
+    }}
+  current_total_discharge_w: >-
+    {{
+      (slot_1_current_target_w | float(0) if slot_1_current_target_w | float(0) > 0 and not (off_peak_active | bool and battery_1_target_power_uses_absolute_value | bool) else 0)
+      + (slot_2_current_target_w | float(0) if slot_2_current_target_w | float(0) > 0 and not (off_peak_active | bool and battery_2_target_power_uses_absolute_value | bool) else 0)
+      + (slot_3_current_target_w | float(0) if slot_3_current_target_w | float(0) > 0 and not (off_peak_active | bool and battery_3_target_power_uses_absolute_value | bool) else 0)
+      + (slot_4_current_target_w | float(0) if slot_4_current_target_w | float(0) > 0 and not (off_peak_active | bool and battery_4_target_power_uses_absolute_value | bool) else 0)
+    }}
+  hold_discharge_mode: >-
+    {{ current_total_discharge_w >= control_deadband_w
+       and import_need_w < control_deadband_w
+       and export_surplus_w < control_deadband_w }}
+  hold_charge_mode: >-
+    {{ current_total_charge_w >= control_deadband_w
+       and export_surplus_w < control_deadband_w
+       and import_need_w < control_deadband_w }}
+
+  operating_mode: >-
+    {% if not house_power_valid %}
+      invalid_sensor
+    {% elif off_peak_active | bool %}
+      off_peak_charge
+    {% elif import_need_w >= control_deadband_w and discharge_capable_count > 0 %}
+      discharge
+    {% elif hold_discharge_mode %}
+      discharge_hold
+    {% elif export_surplus_w >= control_deadband_w and charge_capable_count > 0 %}
+      charge
+    {% elif hold_charge_mode %}
+      charge_hold
+    {% else %}
+      neutral
+    {% endif %}
+
+  soft_low_discharge_priority_active: >-
+    {% set ns = namespace(active=false) %}
+    {% for battery in batteries %}
+      {% if battery.soft_low_soc_priority | bool %}
+        {% for other in batteries %}
+          {% if other.slot != battery.slot
+                and other.discharge_available
+                and not (other.soft_low_soc_priority | bool)
+                and other.soc | float(0) >= battery.soc | float(0) + low_soc_priority_gap_pct | float(0) %}
+            {% set ns.active = true %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.active }}
+  discharge_hold_order: >-
+    {% set ns = namespace(candidates=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_discharge and battery.commanded_discharge | float(0) > 0 %}
+        {% set hold = namespace(better_same_cooldown_waiting=false, healthier_waiting=false) %}
+        {% for other in batteries %}
+          {% if other.slot != battery.slot
+                and other.discharge_available
+                and other.commanded_discharge | float(0) <= 0
+                and other.cooldown_s | float(0) == battery.cooldown_s | float(0)
+                and (
+                  (other.headroom_priority and not battery.headroom_priority)
+                  or (
+                    other.headroom_priority == battery.headroom_priority
+                    and other.soc | float(0) > battery.soc | float(0)
+                  )
+                ) %}
+            {% set hold.better_same_cooldown_waiting = true %}
+          {% endif %}
+          {% if other.slot != battery.slot
+                and battery.soft_low_soc_priority | bool
+                and other.discharge_available
+                and not (other.soft_low_soc_priority | bool)
+                and other.soc | float(0) >= battery.soc | float(0) + low_soc_priority_gap_pct | float(0) %}
+            {% set hold.healthier_waiting = true %}
+          {% endif %}
+        {% endfor %}
+        {% if not hold.better_same_cooldown_waiting and not hold.healthier_waiting %}
+          {% set ns.candidates = ns.candidates + [battery] %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ (ns.candidates | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true) }}
+  discharge_residual_order: >-
+    {% set ns = namespace(headroom=[], regular=[], deferred=[]) %}
+    {% for battery in batteries %}
+      {% if battery.discharge_available %}
+        {% if battery.headroom_priority %}
+          {% set ns.headroom = ns.headroom + [battery] %}
+        {% else %}
+          {% set defer = namespace(value=false) %}
+          {% if battery.soft_low_soc_priority | bool %}
+            {% for other in batteries %}
+              {% if other.slot != battery.slot
+                    and other.discharge_available
+                    and not (other.soft_low_soc_priority | bool)
+                    and other.soc | float(0) >= battery.soc | float(0) + low_soc_priority_gap_pct | float(0) %}
+                {% set defer.value = true %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          {% if defer.value %}
+            {% set ns.deferred = ns.deferred + [battery] %}
+          {% else %}
+            {% set ns.regular = ns.regular + [battery] %}
+          {% endif %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ (ns.headroom | sort(attribute='cooldown_s') | sort(attribute='soc', reverse=true))
+       + ((ns.regular | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true))
+       + ((ns.deferred | sort(attribute='soc', reverse=true)) | sort(attribute='cooldown_s', reverse=true)) }}
+  discharge_trim_order: >-
+    {% set ns = namespace(regular=[], headroom=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_discharge and battery.commanded_discharge | float(0) > 0 %}
+        {% if battery.headroom_priority %}
+          {% set ns.headroom = ns.headroom + [battery] %}
+        {% else %}
+          {% set ns.regular = ns.regular + [battery] %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ ((ns.regular | sort(attribute='soc')) | sort(attribute='cooldown_s'))
+       + (ns.headroom | sort(attribute='cooldown_s') | sort(attribute='soc')) }}
+  responsive_discharge_trim_cooldown_s: >-
+    {% set ns = namespace(cooldowns=[]) %}
+    {% for battery in discharge_trim_order %}
+      {% if battery.responsive | bool and battery.cooldown_s | float(0) > 0 %}
+        {% set ns.cooldowns = ns.cooldowns + [battery.cooldown_s | float(0)] %}
+      {% endif %}
+    {% endfor %}
+    {% if ns.cooldowns | count > 0 %}
+      {{ ns.cooldowns | min }}
+    {% else %}
+      0
+    {% endif %}
+  responsive_discharge_trim_order: >-
+    {% set ns = namespace(candidates=[]) %}
+    {% for battery in discharge_trim_order %}
+      {% if battery.responsive | bool
+            and responsive_discharge_trim_cooldown_s | float(0) > 0
+            and battery.cooldown_s | float(0) == responsive_discharge_trim_cooldown_s | float(0) %}
+        {% set ns.candidates = ns.candidates + [battery] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.candidates }}
+  responsive_charge_absorber_available: >-
+    {% set ns = namespace(available=false) %}
+    {% for battery in batteries %}
+      {% if battery.can_charge
+            and battery.responsive | bool
+            and battery.cooldown_s | float(0) > 0
+            and battery.max_charge | float(0) > battery.current_charge | float(0) %}
+        {% set ns.available = true %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.available }}
+  responsive_discharge_export_trim_w: >-
+    {% if raw_export_w | float(0) <= 0
+          or responsive_discharge_trim_cooldown_s | float(0) <= 0 %}
+      0
+    {% else %}
+      {{ [raw_export_w | float(0), control_deadband_w | float(0)] | min }}
+    {% endif %}
+  cooldown_ready_discharge_export_trim_w: >-
+    {% if responsive_charge_absorber_available | bool %}
+      0
+    {% elif raw_export_w | float(0) < control_deadband_w | float(0) %}
+      0
+    {% else %}
+      {{ [raw_export_w | float(0), control_deadband_w | float(0)] | min }}
+    {% endif %}
+  responsive_discharge_target_cooldown_s: >-
+    {% set ns = namespace(cooldowns=[]) %}
+    {% for battery in batteries %}
+      {% if battery.discharge_available
+            and battery.responsive | bool
+            and battery.cooldown_s | float(0) > 0 %}
+        {% set ns.cooldowns = ns.cooldowns + [battery.cooldown_s | float(0)] %}
+      {% endif %}
+    {% endfor %}
+    {% if ns.cooldowns | count > 0 %}
+      {{ ns.cooldowns | min }}
+    {% else %}
+      0
+    {% endif %}
+  charge_order: >-
+    {% set ns = namespace(regular=[], headroom=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_charge %}
+        {% if battery.headroom_priority %}
+          {% set ns.headroom = ns.headroom + [battery] %}
+        {% else %}
+          {% set ns.regular = ns.regular + [battery] %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ ((ns.regular | sort(attribute='soc')) | sort(attribute='cooldown_s'))
+       + (ns.headroom | sort(attribute='cooldown_s') | sort(attribute='soc')) }}
+  emergency_charge_order: >-
+    {% set ns = namespace(candidates=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_charge %}
+        {% set ns.candidates = ns.candidates + [battery] %}
+      {% endif %}
+    {% endfor %}
+    {{ (ns.candidates | sort(attribute='soc')) | sort(attribute='cooldown_s') }}
+  responsive_charge_target_cooldown_s: >-
+    {% set ns = namespace(cooldowns=[]) %}
+    {% for battery in batteries %}
+      {% if battery.can_charge
+            and battery.responsive | bool
+            and battery.cooldown_s | float(0) > 0 %}
+        {% set ns.cooldowns = ns.cooldowns + [battery.cooldown_s | float(0)] %}
+      {% endif %}
+    {% endfor %}
+    {% if ns.cooldowns | count > 0 %}
+      {{ ns.cooldowns | min }}
+    {% else %}
+      0
+    {% endif %}
+  opportunistic_charge_threshold_w: >-
+    {% if responsive_charge_target_cooldown_s | float(0) > 0 %}
+      {{ control_deadband_w | float(0) }}
+    {% else %}
+      {{ control_deadband_w | float(0) }}
+    {% endif %}
+
+  discharge_plan: >-
+    {% set ns = namespace(
+      remaining=[(import_need_w | float(0)) - (uncommanded_actual_discharge_w | float(0)), 0] | max,
+      trim_remaining=0,
+      trimmed_locked_w=0,
+      chargeable_raw_export_w=[raw_export_w | float(0) - current_total_discharge_w | float(0), 0] | max,
+      export_latency_brake_w=0,
+      t1=0,
+      t2=0,
+      t3=0,
+      t4=0,
+      responsive_trim_remaining=0,
+      cooldown_ready_trim_remaining=0,
+      export_latency_brake_remaining=0,
+      discharge_increase_budget_remaining=discharge_increase_budget_w | float(0)
+    ) %}
+    {% if operating_mode in ['discharge', 'discharge_hold'] %}
+      {% for battery in discharge_hold_order %}
+        {% set allocation = [battery.commanded_discharge, battery.max_discharge] | min %}
+        {% set allocation = [allocation, 0] | max %}
+        {% set effective_allocation = [battery.current_discharge, allocation] | min %}
+        {% if battery.slot == 1 %}
+          {% set ns.t1 = allocation | round(0) %}
+        {% elif battery.slot == 2 %}
+          {% set ns.t2 = allocation | round(0) %}
+        {% elif battery.slot == 3 %}
+          {% set ns.t3 = allocation | round(0) %}
+        {% elif battery.slot == 4 %}
+          {% set ns.t4 = allocation | round(0) %}
+        {% endif %}
+        {% set ns.remaining = [ns.remaining - effective_allocation, 0] | max %}
+      {% endfor %}
+      {% if operating_mode == 'discharge' %}
+        {% for battery in discharge_residual_order %}
+          {% set current_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set current_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set current_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set current_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set current_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% if ns.remaining > 0
+                and not battery.discharge_locked
+                and (not battery.charge_locked or battery.responsive) %}
+            {% set headroom = [battery.max_discharge - current_allocation, 0] | max %}
+            {% set increase_allowed = raw_export_w | float(0) <= 0
+                  or not (responsive_charge_absorber_available | bool)
+                  or battery.responsive | bool %}
+            {% set allocation = [headroom, ns.remaining] | min if increase_allowed else 0 %}
+            {% set ramp_step = responsive_discharge_increase_step_w | float(0) if battery.responsive else discharge_increase_step_w | float(0) %}
+            {% if house_power_w | float(0) >= strong_import_threshold_w | float(0) %}
+              {% set ramp_step = [ramp_step, strong_import_discharge_increase_step_w | float(0)] | max %}
+            {% endif %}
+            {% set allocation = [allocation, ramp_step, ns.discharge_increase_budget_remaining | float(0)] | min %}
+            {% if battery.slot == 1 %}
+              {% set ns.t1 = (current_allocation + allocation) | round(0) %}
+            {% elif battery.slot == 2 %}
+              {% set ns.t2 = (current_allocation + allocation) | round(0) %}
+            {% elif battery.slot == 3 %}
+              {% set ns.t3 = (current_allocation + allocation) | round(0) %}
+            {% elif battery.slot == 4 %}
+              {% set ns.t4 = (current_allocation + allocation) | round(0) %}
+            {% endif %}
+            {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+            {% set ns.discharge_increase_budget_remaining = [ns.discharge_increase_budget_remaining | float(0) - allocation, 0] | max %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+      {% set ns.trim_remaining = discharge_export_guard_w | float(0) %}
+      {% for battery in discharge_trim_order %}
+        {% if ns.trim_remaining > 0 %}
+          {% set current_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set current_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set current_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set current_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set current_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% set trim_is_charge_absorbable = battery.can_charge
+                and battery.actual_power_fresh
+                and raw_export_w | float(0) > control_deadband_w | float(0)
+                and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
+          {% set trim_allowed = battery.responsive | bool
+                or not (responsive_charge_absorber_available | bool)
+                or ns.chargeable_raw_export_w | float(0) < opportunistic_charge_threshold_w | float(0)
+                or current_total_charge_w | float(0) >= control_deadband_w | float(0) %}
+          {% if current_allocation > 0
+                and battery.actual_power_fresh
+                and battery.target_age_s | float(0) < battery.response_grace_s | float(0)
+                and battery.actual_discharge | float(0) > current_allocation + control_deadband_w | float(0) %}
+            {% set pending_actual_drop = [battery.actual_discharge | float(0) - current_allocation, ns.trim_remaining] | min %}
+            {% set ns.trim_remaining = [ns.trim_remaining - pending_actual_drop, 0] | max %}
+            {% if not trim_is_charge_absorbable %}
+              {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - pending_actual_drop, 0] | max %}
+            {% endif %}
+          {% endif %}
+          {% set trim_allocation = [current_allocation, ns.trim_remaining] | min if trim_allowed else 0 %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = (current_allocation - trim_allocation) | round(0) %}
+          {% endif %}
+          {% if battery.discharge_locked and trim_allocation > 0 %}
+            {% set ns.trimmed_locked_w = ns.trimmed_locked_w + trim_allocation %}
+          {% endif %}
+          {% if trim_allocation > 0 and not battery.discharge_locked and not trim_is_charge_absorbable %}
+            {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - trim_allocation, 0] | max %}
+          {% endif %}
+          {% set ns.trim_remaining = [ns.trim_remaining - trim_allocation, 0] | max %}
+        {% endif %}
+      {% endfor %}
+      {% set ns.responsive_trim_remaining = responsive_discharge_export_trim_w | float(0) %}
+      {% for battery in responsive_discharge_trim_order %}
+        {% if ns.responsive_trim_remaining > 0 %}
+          {% set current_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set current_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set current_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set current_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set current_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% set trim_is_charge_absorbable = battery.can_charge
+                and battery.actual_power_fresh
+                and raw_export_w | float(0) > control_deadband_w | float(0)
+                and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
+          {% set trim_allocation = [current_allocation, ns.responsive_trim_remaining] | min %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = (current_allocation - trim_allocation) | round(0) %}
+          {% endif %}
+          {% if battery.discharge_locked and trim_allocation > 0 %}
+            {% set ns.trimmed_locked_w = ns.trimmed_locked_w + trim_allocation %}
+          {% endif %}
+          {% if trim_allocation > 0 and not battery.discharge_locked and not trim_is_charge_absorbable %}
+            {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - trim_allocation, 0] | max %}
+          {% endif %}
+          {% set ns.responsive_trim_remaining = [ns.responsive_trim_remaining - trim_allocation, 0] | max %}
+        {% endif %}
+      {% endfor %}
+      {% set responsive_trim_applied = (responsive_discharge_export_trim_w | float(0)) - (ns.responsive_trim_remaining | float(0)) %}
+      {% set ns.cooldown_ready_trim_remaining = [(cooldown_ready_discharge_export_trim_w | float(0)) - responsive_trim_applied, 0] | max %}
+      {% for battery in discharge_trim_order %}
+        {% if ns.cooldown_ready_trim_remaining > 0 and not battery.discharge_locked %}
+          {% set current_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set current_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set current_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set current_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set current_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% set trim_is_charge_absorbable = battery.can_charge
+                and battery.actual_power_fresh
+                and raw_export_w | float(0) > control_deadband_w | float(0)
+                and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
+          {% set trim_allocation = [current_allocation, ns.cooldown_ready_trim_remaining] | min %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = (current_allocation - trim_allocation) | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = (current_allocation - trim_allocation) | round(0) %}
+          {% endif %}
+          {% if trim_allocation > 0 and not trim_is_charge_absorbable %}
+            {% set ns.chargeable_raw_export_w = [ns.chargeable_raw_export_w - trim_allocation, 0] | max %}
+          {% endif %}
+          {% set ns.cooldown_ready_trim_remaining = [ns.cooldown_ready_trim_remaining - trim_allocation, 0] | max %}
+        {% endif %}
+      {% endfor %}
+      {% set ns.export_latency_brake_remaining = [raw_export_w | float(0) - control_deadband_w | float(0), 0] | max %}
+      {% for battery in responsive_discharge_trim_order %}
+        {% if ns.export_latency_brake_remaining > 0
+              and battery.can_charge
+              and battery.actual_power_fresh %}
+          {% set current_allocation = 0 %}
+          {% if battery.slot == 1 %}
+            {% set current_allocation = ns.t1 | float(0) %}
+          {% elif battery.slot == 2 %}
+            {% set current_allocation = ns.t2 | float(0) %}
+          {% elif battery.slot == 3 %}
+            {% set current_allocation = ns.t3 | float(0) %}
+          {% elif battery.slot == 4 %}
+            {% set current_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% if current_allocation > 0
+                and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
+            {% set brake_allocation = [current_allocation, ns.export_latency_brake_remaining] | min %}
+            {% if battery.slot == 1 %}
+              {% set ns.t1 = (current_allocation - brake_allocation) | round(0) %}
+            {% elif battery.slot == 2 %}
+              {% set ns.t2 = (current_allocation - brake_allocation) | round(0) %}
+            {% elif battery.slot == 3 %}
+              {% set ns.t3 = (current_allocation - brake_allocation) | round(0) %}
+            {% elif battery.slot == 4 %}
+              {% set ns.t4 = (current_allocation - brake_allocation) | round(0) %}
+            {% endif %}
+            {% set ns.export_latency_brake_w = ns.export_latency_brake_w + brake_allocation %}
+            {% set ns.export_latency_brake_remaining = [ns.export_latency_brake_remaining - brake_allocation, 0] | max %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    {{ {
+      'targets': {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4},
+      'trimmed_locked_w': ns.trimmed_locked_w | round(0),
+      'unresolved_raw_export_w': ns.trim_remaining | round(0),
+      'chargeable_raw_export_w': ns.chargeable_raw_export_w | round(0),
+      'export_latency_brake_w': ns.export_latency_brake_w | round(0)
+    } }}
+  discharge_targets: "{{ discharge_plan['targets'] }}"
+  unresolved_raw_export_w: "{{ discharge_plan['unresolved_raw_export_w'] | float(0) }}"
+  chargeable_raw_export_w: "{{ discharge_plan['chargeable_raw_export_w'] | float(0) }}"
+  export_latency_brake_w: "{{ discharge_plan['export_latency_brake_w'] | float(0) }}"
+  emergency_charge_surplus_w: >-
+    {% if operating_mode in ['discharge', 'discharge_hold', 'charge']
+          and charge_capable_count | int(0) > 0
+          and chargeable_raw_export_w | float(0) >= opportunistic_charge_threshold_w | float(0) %}
+      {{ chargeable_raw_export_w | float(0) }}
+    {% else %}
+      0
+    {% endif %}
+  emergency_charge_active: "{{ emergency_charge_surplus_w | float(0) >= opportunistic_charge_threshold_w | float(0) }}"
+  charge_targets: >-
+    {% set batteries = emergency_charge_order if emergency_charge_active | bool else charge_order %}
+    {% set charge_need = emergency_charge_surplus_w | float(0) if emergency_charge_active | bool else export_surplus_w | float(0) %}
+    {% set ns = namespace(remaining=[(charge_need | float(0)) - (uncommanded_actual_charge_w | float(0)), 0] | max, t1=0, t2=0, t3=0, t4=0) %}
+    {% if operating_mode == 'charge' or emergency_charge_active | bool %}
+      {% for battery in batteries %}
+        {% set battery_discharge_target = 0 %}
+        {% if battery.slot == 1 %}
+          {% set battery_discharge_target = discharge_targets['1'] | float(0) %}
+        {% elif battery.slot == 2 %}
+          {% set battery_discharge_target = discharge_targets['2'] | float(0) %}
+        {% elif battery.slot == 3 %}
+          {% set battery_discharge_target = discharge_targets['3'] | float(0) %}
+        {% elif battery.slot == 4 %}
+          {% set battery_discharge_target = discharge_targets['4'] | float(0) %}
+        {% endif %}
+        {% if battery.charge_locked
+              and (operating_mode == 'charge' or battery_discharge_target < control_deadband_w | float(0)) %}
+          {% set allocation = [battery.current_charge, battery.max_charge] | min %}
+          {% set allocation = [allocation, 0] | max %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = allocation | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = allocation | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = allocation | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = allocation | round(0) %}
+          {% endif %}
+          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+        {% endif %}
+      {% endfor %}
+      {% for battery in batteries %}
+        {% set battery_discharge_target = 0 %}
+        {% if battery.slot == 1 %}
+          {% set battery_discharge_target = discharge_targets['1'] | float(0) %}
+        {% elif battery.slot == 2 %}
+          {% set battery_discharge_target = discharge_targets['2'] | float(0) %}
+        {% elif battery.slot == 3 %}
+          {% set battery_discharge_target = discharge_targets['3'] | float(0) %}
+        {% elif battery.slot == 4 %}
+          {% set battery_discharge_target = discharge_targets['4'] | float(0) %}
+        {% endif %}
+        {% if ns.remaining > 0
+              and not battery.charge_locked
+              and (not battery.discharge_locked or battery.responsive)
+              and (operating_mode == 'charge'
+                   or (
+                     battery_discharge_target < control_deadband_w | float(0)
+                     and battery.current_discharge | float(0) < control_deadband_w | float(0)
+                   )) %}
+          {% set allocation = [battery.max_charge, ns.remaining] | min %}
+          {% set allocation = [allocation, 0] | max %}
+          {% if battery.slot == 1 %}
+            {% set ns.t1 = allocation | round(0) %}
+          {% elif battery.slot == 2 %}
+            {% set ns.t2 = allocation | round(0) %}
+          {% elif battery.slot == 3 %}
+            {% set ns.t3 = allocation | round(0) %}
+          {% elif battery.slot == 4 %}
+            {% set ns.t4 = allocation | round(0) %}
+          {% endif %}
+          {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
+        {% endif %}
+      {% endfor %}
+    {% elif operating_mode == 'charge_hold' %}
+      {% for battery in batteries %}
+        {% set allocation = battery.current_charge | float(0) %}
+        {% if battery.slot == 1 %}
+          {% set ns.t1 = allocation | round(0) %}
+        {% elif battery.slot == 2 %}
+          {% set ns.t2 = allocation | round(0) %}
+        {% elif battery.slot == 3 %}
+          {% set ns.t3 = allocation | round(0) %}
+        {% elif battery.slot == 4 %}
+          {% set ns.t4 = allocation | round(0) %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
+  neutral_targets: >-
+    {% set ns = namespace(t1=0, t2=0, t3=0, t4=0) %}
+    {% if operating_mode == 'neutral' %}
+      {% for battery in batteries %}
+        {% set hold_power = battery.current_target | float(0) %}
+        {% set hold_power = [hold_power, battery.max_discharge | float(0)] | min %}
+        {% set hold_power = [hold_power, 0 - (battery.max_charge | float(0))] | max %}
+        {% if battery.slot == 1 %}
+          {% set ns.t1 = hold_power | round(0) %}
+        {% elif battery.slot == 2 %}
+          {% set ns.t2 = hold_power | round(0) %}
+        {% elif battery.slot == 3 %}
+          {% set ns.t3 = hold_power | round(0) %}
+        {% elif battery.slot == 4 %}
+          {% set ns.t4 = hold_power | round(0) %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    {{ {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4} }}
+  discharge_trimmed_locked_w: "{{ discharge_plan['trimmed_locked_w'] | float(0) }}"
+
+  discharge_target_1: "{{ discharge_targets['1'] | float(0) }}"
+  discharge_target_2: "{{ discharge_targets['2'] | float(0) }}"
+  discharge_target_3: "{{ discharge_targets['3'] | float(0) }}"
+  discharge_target_4: "{{ discharge_targets['4'] | float(0) }}"
+
+  charge_target_1: "{{ charge_targets['1'] | float(0) }}"
+  charge_target_2: "{{ charge_targets['2'] | float(0) }}"
+  charge_target_3: "{{ charge_targets['3'] | float(0) }}"
+  charge_target_4: "{{ charge_targets['4'] | float(0) }}"
+  neutral_target_1: "{{ neutral_targets['1'] | float(0) }}"
+  neutral_target_2: "{{ neutral_targets['2'] | float(0) }}"
+  neutral_target_3: "{{ neutral_targets['3'] | float(0) }}"
+  neutral_target_4: "{{ neutral_targets['4'] | float(0) }}"
+
+  locked_discharge_reduction_pending: >-
+    {{
+      (
+        slot_1_current_target_w | float(0) > 0
+        and discharge_target_1 | float(0) >= control_deadband_w | float(0)
+        and discharge_target_1 | float(0) < slot_1_current_target_w | float(0) - control_deadband_w | float(0)
+        and not (discharge_cooldown_ok_1 | bool)
+      )
+      or (
+        slot_2_current_target_w | float(0) > 0
+        and discharge_target_2 | float(0) >= control_deadband_w | float(0)
+        and discharge_target_2 | float(0) < slot_2_current_target_w | float(0) - control_deadband_w | float(0)
+        and not (discharge_cooldown_ok_2 | bool)
+      )
+      or (
+        slot_3_current_target_w | float(0) > 0
+        and discharge_target_3 | float(0) >= control_deadband_w | float(0)
+        and discharge_target_3 | float(0) < slot_3_current_target_w | float(0) - control_deadband_w | float(0)
+        and not (discharge_cooldown_ok_3 | bool)
+      )
+      or (
+        slot_4_current_target_w | float(0) > 0
+        and discharge_target_4 | float(0) >= control_deadband_w | float(0)
+        and discharge_target_4 | float(0) < slot_4_current_target_w | float(0) - control_deadband_w | float(0)
+        and not (discharge_cooldown_ok_4 | bool)
+      )
+    }}
+
+  zero_target_actual_discharge_w: >-
+    {{
+      (slot_1_actual_discharge_w | float(0) if slot_1_used | bool and slot_1_actual_power_usable | bool and slot_1_current_target_w | float(0) <= control_deadband_w | float(0) and slot_1_actual_discharge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_2_actual_discharge_w | float(0) if slot_2_used | bool and slot_2_actual_power_usable | bool and slot_2_current_target_w | float(0) <= control_deadband_w | float(0) and slot_2_actual_discharge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_3_actual_discharge_w | float(0) if slot_3_used | bool and slot_3_actual_power_usable | bool and slot_3_current_target_w | float(0) <= control_deadband_w | float(0) and slot_3_actual_discharge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_4_actual_discharge_w | float(0) if slot_4_used | bool and slot_4_actual_power_usable | bool and slot_4_current_target_w | float(0) <= control_deadband_w | float(0) and slot_4_actual_discharge_w | float(0) > control_deadband_w | float(0) else 0)
+    }}
+  zero_target_actual_charge_w: >-
+    {{
+      (slot_1_actual_charge_w | float(0) if slot_1_used | bool and slot_1_actual_power_usable | bool and slot_1_current_target_w | float(0) >= 0 - (control_deadband_w | float(0)) and slot_1_actual_charge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_2_actual_charge_w | float(0) if slot_2_used | bool and slot_2_actual_power_usable | bool and slot_2_current_target_w | float(0) >= 0 - (control_deadband_w | float(0)) and slot_2_actual_charge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_3_actual_charge_w | float(0) if slot_3_used | bool and slot_3_actual_power_usable | bool and slot_3_current_target_w | float(0) >= 0 - (control_deadband_w | float(0)) and slot_3_actual_charge_w | float(0) > control_deadband_w | float(0) else 0)
+      + (slot_4_actual_charge_w | float(0) if slot_4_used | bool and slot_4_actual_power_usable | bool and slot_4_current_target_w | float(0) >= 0 - (control_deadband_w | float(0)) and slot_4_actual_charge_w | float(0) > control_deadband_w | float(0) else 0)
+    }}
+  planned_discharge_total_w: >-
+    {{
+      (discharge_target_1 | float(0))
+      + (discharge_target_2 | float(0))
+      + (discharge_target_3 | float(0))
+      + (discharge_target_4 | float(0))
+    }}
+  planned_charge_total_w: >-
+    {{
+      (charge_target_1 | float(0))
+      + (charge_target_2 | float(0))
+      + (charge_target_3 | float(0))
+      + (charge_target_4 | float(0))
+    }}
+  corrected_import_need_w: "{{ [import_need_w | float(0) - zero_target_actual_discharge_w | float(0), 0] | max }}"
+  corrected_export_surplus_w: "{{ [export_surplus_w | float(0) - zero_target_actual_charge_w | float(0), 0] | max }}"
+  possible_duplicate_discharge_w: >-
+    {% if zero_target_actual_discharge_w | float(0) > control_deadband_w | float(0) %}
+      {{ [planned_discharge_total_w | float(0) - corrected_import_need_w | float(0), 0] | max }}
+    {% else %}
+      0
+    {% endif %}
+  possible_duplicate_charge_w: >-
+    {% if zero_target_actual_charge_w | float(0) > control_deadband_w | float(0) %}
+      {{ [planned_charge_total_w | float(0) - corrected_export_surplus_w | float(0), 0] | max }}
+    {% else %}
+      0
+    {% endif %}
+
+  responsive_target_allowed_1: >-
+    {{ battery_1_reactive | bool
+       and battery_1_cooldown_seconds | float(0) > 0
+       and (
+         (
+           slot_1_can_discharge | bool
+           and battery_1_cooldown_seconds | float(0) == responsive_discharge_target_cooldown_s | float(0)
+         )
+         or (
+           slot_1_can_charge | bool
+           and battery_1_cooldown_seconds | float(0) == responsive_charge_target_cooldown_s | float(0)
+         )
+       ) }}
+  discharge_active_1: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target_1 >= control_deadband_w | float(0) }}"
+  charge_active_1: "{{ (operating_mode in ['charge', 'charge_hold', 'off_peak_charge'] or emergency_charge_active | bool) and charge_target_1 >= control_deadband_w | float(0) }}"
+  neutral_hold_active_1: "{{ operating_mode == 'neutral' and neutral_target_1 | abs >= control_deadband_w | float(0) }}"
+  signed_target_1: >-
+    {% if discharge_active_1 %}
+      {{ discharge_target_1 | float(0) }}
+    {% elif charge_active_1 %}
+      {{ 0 - (charge_target_1 | float(0)) }}
+    {% elif neutral_hold_active_1 %}
+      {{ neutral_target_1 | float(0) }}
+    {% elif operating_mode == 'off_peak_charge'
+          and slot_1_current_target_w | float(0) < 0 %}
+      {{ slot_1_current_target_w | float(0) }}
+    {% elif operating_mode == 'off_peak_charge'
+          and battery_1_target_power_uses_absolute_value | bool
+          and not (off_peak_trigger_entered_active | bool)
+          and slot_1_current_target_w | float(0) > 0 %}
+      {{ 0 - (slot_1_current_target_w | float(0)) }}
+    {% else %}
+      0
+    {% endif %}
+  desired_target_sign_1: >-
+    {% if signed_target_1 | float(0) > 0 %}
+      1
+    {% elif signed_target_1 | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  current_target_for_control_1: >-
+    {% set current = slot_1_current_target_w | float(0) %}
+    {% if battery_1_target_power_uses_absolute_value | bool
+          and desired_target_sign_1 | int(0) == -1
+          and current > 0 %}
+      {{ 0 - current }}
+    {% else %}
+      {{ current }}
+    {% endif %}
+  current_target_sign_for_control_1: >-
+    {% if current_target_for_control_1 | float(0) > 0 %}
+      1
+    {% elif current_target_for_control_1 | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  current_target_rounded_1: "{{ current_target_for_control_1 | float(0) | round(0) | int(0) }}"
+  desired_target_rounded_1: "{{ signed_target_1 | float(0) | round(0) | int(0) }}"
+  target_value_changed_1: "{{ desired_target_rounded_1 | int(0) != current_target_rounded_1 | int(0) }}"
+  same_direction_target_delta_w_1: "{{ (desired_target_rounded_1 | int(0) - current_target_rounded_1 | int(0)) | abs }}"
+  same_direction_small_adjustment_1: >-
+    {{ target_value_changed_1 | bool
+       and desired_target_sign_1 | int(0) != 0
+       and desired_target_sign_1 | int(0) == current_target_sign_for_control_1 | int(0)
+       and same_direction_target_delta_w_1 | float(0) < control_deadband_w | float(0) }}
+  direction_change_blocked_by_cooldown_1: >-
+    {{ desired_target_sign_1 | int(0) != 0
+       and current_target_sign_for_control_1 | int(0) != 0
+       and desired_target_sign_1 | int(0) != current_target_sign_for_control_1 | int(0)
+       and not (triggered_by_off_peak_entity | bool)
+       and slot_1_target_age_s | float(0) < slot_1_response_grace_s | float(0) }}
+  start_from_zero_flow_confirmed_1: >-
+    {{ current_target_sign_for_control_1 | int(0) == 0
+       and allow_confirmed_flow_start_from_zero | bool
+       and (
+         (desired_target_sign_1 | int(0) == 1
+          and house_power_valid
+          and house_power_w | float(0) >= control_deadband_w | float(0)
+          and (
+            battery_1_reactive | bool
+            or discharge_cooldown_ok_1 | bool
+          ))
+         or
+         (desired_target_sign_1 | int(0) == -1
+          and house_power_valid
+          and house_power_w | float(0) <= 0 - (control_deadband_w | float(0))
+          and (
+            battery_1_reactive | bool
+            or charge_cooldown_ok_1 | bool
+          ))
+       ) }}
+  discharge_increase_blocked_by_locked_reduction_1: >-
+    {{ locked_discharge_reduction_pending | bool
+       and signed_target_1 | float(0) > slot_1_current_target_w | float(0)
+       and signed_target_1 | float(0) > 0
+       and (signed_target_1 | float(0) - slot_1_current_target_w | float(0)) > [house_power_w | float(0), 0] | max
+       and not (discharge_export_guard_active | bool) }}
+  should_write_target_power_1: >-
+    {% if not slot_1_target_entity_configured %}
+      false
+    {% elif desired_target_sign_1 | int(0) == 0 %}
+      {{ current_target_sign_for_control_1 | int(0) != 0 }}
+    {% elif direction_change_blocked_by_cooldown_1 | bool %}
+      false
+    {% elif desired_target_sign_1 | int(0) != current_target_sign_for_control_1 | int(0)
+          and current_target_sign_for_control_1 | int(0) != 0 %}
+      true
+    {% elif not (target_value_changed_1 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_1 | bool %}
+      false
+    {% elif discharge_increase_blocked_by_locked_reduction_1 | bool %}
+      false
+    {% elif start_from_zero_flow_confirmed_1 | bool %}
+      true
+    {% elif signed_target_1 | float(0) > 0 %}
+      {{ discharge_cooldown_ok_1
+         or (discharge_export_guard_active
+             and slot_1_current_target_w | float(0) > 0
+             and signed_target_1 | float(0) < slot_1_current_target_w | float(0)) }}
+    {% elif signed_target_1 | float(0) < 0 %}
+      {{ charge_cooldown_ok_1
+         or (
+           operating_mode == 'off_peak_charge'
+           and current_target_sign_for_control_1 | int(0) == 0
+         ) }}
+    {% else %}
+      false
+    {% endif %}
+  should_run_discharge_actions_1: >-
+    {% if not slot_1_has_discharge_actions %}
+      false
+    {% elif direction_change_blocked_by_cooldown_1 | bool %}
+      false
+    {% elif signed_target_1 | float(0) <= 0 %}
+      {{ (
+           current_target_sign_for_control_1 | int(0) == 1
+           and target_value_changed_1 | bool
+         ) or (
+           slot_1_actual_power_usable | bool
+           and slot_1_actual_discharge_w | float(0) > control_deadband_w | float(0)
+           and discharge_cooldown_ok_1 | bool
+         ) }}
+    {% elif discharge_increase_blocked_by_locked_reduction_1 | bool %}
+      false
+    {% elif current_target_sign_for_control_1 | int(0) != 1 %}
+      {{ start_from_zero_flow_confirmed_1 | bool
+         or (responsive_target_allowed_1 | bool and signed_target_1 | float(0) > 0)
+         or current_target_sign_for_control_1 | int(0) != 0 }}
+    {% elif not (target_value_changed_1 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_1 | bool %}
+      false
+    {% else %}
+      {{ discharge_cooldown_ok_1
+         or (discharge_export_guard_active
+             and slot_1_current_target_w | float(0) > 0
+             and signed_target_1 | float(0) < slot_1_current_target_w | float(0)) }}
+    {% endif %}
+  should_run_charge_actions_1: >-
+    {% if not slot_1_has_charge_actions %}
+      false
+    {% elif operating_mode == 'off_peak_charge' %}
+      false
+    {% elif direction_change_blocked_by_cooldown_1 | bool %}
+      false
+    {% elif signed_target_1 | float(0) >= 0 %}
+      {{ (
+           current_target_sign_for_control_1 | int(0) == -1
+           and target_value_changed_1 | bool
+         ) or (
+           slot_1_actual_power_usable | bool
+           and slot_1_actual_charge_w | float(0) > control_deadband_w | float(0)
+           and charge_cooldown_ok_1 | bool
+         ) }}
+    {% elif current_target_sign_for_control_1 | int(0) != -1 %}
+      {{ start_from_zero_flow_confirmed_1 | bool
+         or (operating_mode == 'off_peak_charge' and charge_cooldown_ok_1 | bool)
+         or (responsive_target_allowed_1 | bool and signed_target_1 | float(0) < 0)
+         or current_target_sign_for_control_1 | int(0) != 0 }}
+    {% elif not (target_value_changed_1 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_1 | bool %}
+      false
+    {% else %}
+      {{ charge_cooldown_ok_1 }}
+    {% endif %}
+  should_run_night_charge_actions_1: >-
+    {{ slot_1_has_night_charge_actions | bool
+       and off_peak_active | bool
+       and (
+         off_peak_trigger_entered_active | bool
+         or triggered_by_start_or_reload | bool
+       ) }}
+  
+  responsive_target_allowed_2: >-
+    {{ battery_2_reactive | bool
+       and battery_2_cooldown_seconds | float(0) > 0
+       and (
+         (
+           slot_2_can_discharge | bool
+           and battery_2_cooldown_seconds | float(0) == responsive_discharge_target_cooldown_s | float(0)
+         )
+         or (
+           slot_2_can_charge | bool
+           and battery_2_cooldown_seconds | float(0) == responsive_charge_target_cooldown_s | float(0)
+         )
+       ) }}
+  discharge_active_2: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target_2 >= control_deadband_w | float(0) }}"
+  charge_active_2: "{{ (operating_mode in ['charge', 'charge_hold', 'off_peak_charge'] or emergency_charge_active | bool) and charge_target_2 >= control_deadband_w | float(0) }}"
+  neutral_hold_active_2: "{{ operating_mode == 'neutral' and neutral_target_2 | abs >= control_deadband_w | float(0) }}"
+  signed_target_2: >-
+    {% if discharge_active_2 %}
+      {{ discharge_target_2 | float(0) }}
+    {% elif charge_active_2 %}
+      {{ 0 - (charge_target_2 | float(0)) }}
+    {% elif neutral_hold_active_2 %}
+      {{ neutral_target_2 | float(0) }}
+    {% elif operating_mode == 'off_peak_charge'
+          and slot_2_current_target_w | float(0) < 0 %}
+      {{ slot_2_current_target_w | float(0) }}
+    {% elif operating_mode == 'off_peak_charge'
+          and battery_2_target_power_uses_absolute_value | bool
+          and not (off_peak_trigger_entered_active | bool)
+          and slot_2_current_target_w | float(0) > 0 %}
+      {{ 0 - (slot_2_current_target_w | float(0)) }}
+    {% else %}
+      0
+    {% endif %}
+  desired_target_sign_2: >-
+    {% if signed_target_2 | float(0) > 0 %}
+      1
+    {% elif signed_target_2 | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  current_target_for_control_2: >-
+    {% set current = slot_2_current_target_w | float(0) %}
+    {% if battery_2_target_power_uses_absolute_value | bool
+          and desired_target_sign_2 | int(0) == -1
+          and current > 0 %}
+      {{ 0 - current }}
+    {% else %}
+      {{ current }}
+    {% endif %}
+  current_target_sign_for_control_2: >-
+    {% if current_target_for_control_2 | float(0) > 0 %}
+      1
+    {% elif current_target_for_control_2 | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  current_target_rounded_2: "{{ current_target_for_control_2 | float(0) | round(0) | int(0) }}"
+  desired_target_rounded_2: "{{ signed_target_2 | float(0) | round(0) | int(0) }}"
+  target_value_changed_2: "{{ desired_target_rounded_2 | int(0) != current_target_rounded_2 | int(0) }}"
+  same_direction_target_delta_w_2: "{{ (desired_target_rounded_2 | int(0) - current_target_rounded_2 | int(0)) | abs }}"
+  same_direction_small_adjustment_2: >-
+    {{ target_value_changed_2 | bool
+       and desired_target_sign_2 | int(0) != 0
+       and desired_target_sign_2 | int(0) == current_target_sign_for_control_2 | int(0)
+       and same_direction_target_delta_w_2 | float(0) < control_deadband_w | float(0) }}
+  direction_change_blocked_by_cooldown_2: >-
+    {{ desired_target_sign_2 | int(0) != 0
+       and current_target_sign_for_control_2 | int(0) != 0
+       and desired_target_sign_2 | int(0) != current_target_sign_for_control_2 | int(0)
+       and not (triggered_by_off_peak_entity | bool)
+       and slot_2_target_age_s | float(0) < slot_2_response_grace_s | float(0) }}
+  start_from_zero_flow_confirmed_2: >-
+    {{ current_target_sign_for_control_2 | int(0) == 0
+       and allow_confirmed_flow_start_from_zero | bool
+       and (
+         (desired_target_sign_2 | int(0) == 1
+          and house_power_valid
+          and house_power_w | float(0) >= control_deadband_w | float(0)
+          and (
+            battery_2_reactive | bool
+            or discharge_cooldown_ok_2 | bool
+          ))
+         or
+         (desired_target_sign_2 | int(0) == -1
+          and house_power_valid
+          and house_power_w | float(0) <= 0 - (control_deadband_w | float(0))
+          and (
+            battery_2_reactive | bool
+            or charge_cooldown_ok_2 | bool
+          ))
+       ) }}
+  discharge_increase_blocked_by_locked_reduction_2: >-
+    {{ locked_discharge_reduction_pending | bool
+       and signed_target_2 | float(0) > slot_2_current_target_w | float(0)
+       and signed_target_2 | float(0) > 0
+       and (signed_target_2 | float(0) - slot_2_current_target_w | float(0)) > [house_power_w | float(0), 0] | max
+       and not (discharge_export_guard_active | bool) }}
+  should_write_target_power_2: >-
+    {% if not slot_2_target_entity_configured %}
+      false
+    {% elif desired_target_sign_2 | int(0) == 0 %}
+      {{ current_target_sign_for_control_2 | int(0) != 0 }}
+    {% elif direction_change_blocked_by_cooldown_2 | bool %}
+      false
+    {% elif desired_target_sign_2 | int(0) != current_target_sign_for_control_2 | int(0)
+          and current_target_sign_for_control_2 | int(0) != 0 %}
+      true
+    {% elif not (target_value_changed_2 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_2 | bool %}
+      false
+    {% elif discharge_increase_blocked_by_locked_reduction_2 | bool %}
+      false
+    {% elif start_from_zero_flow_confirmed_2 | bool %}
+      true
+    {% elif signed_target_2 | float(0) > 0 %}
+      {{ discharge_cooldown_ok_2
+         or (discharge_export_guard_active
+             and slot_2_current_target_w | float(0) > 0
+             and signed_target_2 | float(0) < slot_2_current_target_w | float(0)) }}
+    {% elif signed_target_2 | float(0) < 0 %}
+      {{ charge_cooldown_ok_2
+         or (
+           operating_mode == 'off_peak_charge'
+           and current_target_sign_for_control_2 | int(0) == 0
+         ) }}
+    {% else %}
+      false
+    {% endif %}
+  should_run_discharge_actions_2: >-
+    {% if not slot_2_has_discharge_actions %}
+      false
+    {% elif direction_change_blocked_by_cooldown_2 | bool %}
+      false
+    {% elif signed_target_2 | float(0) <= 0 %}
+      {{ (
+           current_target_sign_for_control_2 | int(0) == 1
+           and target_value_changed_2 | bool
+         ) or (
+           slot_2_actual_power_usable | bool
+           and slot_2_actual_discharge_w | float(0) > control_deadband_w | float(0)
+           and discharge_cooldown_ok_2 | bool
+         ) }}
+    {% elif discharge_increase_blocked_by_locked_reduction_2 | bool %}
+      false
+    {% elif current_target_sign_for_control_2 | int(0) != 1 %}
+      {{ start_from_zero_flow_confirmed_2 | bool
+         or (responsive_target_allowed_2 | bool and signed_target_2 | float(0) > 0)
+         or current_target_sign_for_control_2 | int(0) != 0 }}
+    {% elif not (target_value_changed_2 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_2 | bool %}
+      false
+    {% else %}
+      {{ discharge_cooldown_ok_2
+         or (discharge_export_guard_active
+             and slot_2_current_target_w | float(0) > 0
+             and signed_target_2 | float(0) < slot_2_current_target_w | float(0)) }}
+    {% endif %}
+  should_run_charge_actions_2: >-
+    {% if not slot_2_has_charge_actions %}
+      false
+    {% elif operating_mode == 'off_peak_charge' %}
+      false
+    {% elif direction_change_blocked_by_cooldown_2 | bool %}
+      false
+    {% elif signed_target_2 | float(0) >= 0 %}
+      {{ (
+           current_target_sign_for_control_2 | int(0) == -1
+           and target_value_changed_2 | bool
+         ) or (
+           slot_2_actual_power_usable | bool
+           and slot_2_actual_charge_w | float(0) > control_deadband_w | float(0)
+           and charge_cooldown_ok_2 | bool
+         ) }}
+    {% elif current_target_sign_for_control_2 | int(0) != -1 %}
+      {{ start_from_zero_flow_confirmed_2 | bool
+         or (operating_mode == 'off_peak_charge' and charge_cooldown_ok_2 | bool)
+         or (responsive_target_allowed_2 | bool and signed_target_2 | float(0) < 0)
+         or current_target_sign_for_control_2 | int(0) != 0 }}
+    {% elif not (target_value_changed_2 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_2 | bool %}
+      false
+    {% else %}
+      {{ charge_cooldown_ok_2 }}
+    {% endif %}
+  should_run_night_charge_actions_2: >-
+    {{ slot_2_has_night_charge_actions | bool
+       and off_peak_active | bool
+       and (
+         off_peak_trigger_entered_active | bool
+         or triggered_by_start_or_reload | bool
+       ) }}
+  
+  responsive_target_allowed_3: >-
+    {{ battery_3_reactive | bool
+       and battery_3_cooldown_seconds | float(0) > 0
+       and (
+         (
+           slot_3_can_discharge | bool
+           and battery_3_cooldown_seconds | float(0) == responsive_discharge_target_cooldown_s | float(0)
+         )
+         or (
+           slot_3_can_charge | bool
+           and battery_3_cooldown_seconds | float(0) == responsive_charge_target_cooldown_s | float(0)
+         )
+       ) }}
+  discharge_active_3: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target_3 >= control_deadband_w | float(0) }}"
+  charge_active_3: "{{ (operating_mode in ['charge', 'charge_hold', 'off_peak_charge'] or emergency_charge_active | bool) and charge_target_3 >= control_deadband_w | float(0) }}"
+  neutral_hold_active_3: "{{ operating_mode == 'neutral' and neutral_target_3 | abs >= control_deadband_w | float(0) }}"
+  signed_target_3: >-
+    {% if discharge_active_3 %}
+      {{ discharge_target_3 | float(0) }}
+    {% elif charge_active_3 %}
+      {{ 0 - (charge_target_3 | float(0)) }}
+    {% elif neutral_hold_active_3 %}
+      {{ neutral_target_3 | float(0) }}
+    {% elif operating_mode == 'off_peak_charge'
+          and slot_3_current_target_w | float(0) < 0 %}
+      {{ slot_3_current_target_w | float(0) }}
+    {% elif operating_mode == 'off_peak_charge'
+          and battery_3_target_power_uses_absolute_value | bool
+          and not (off_peak_trigger_entered_active | bool)
+          and slot_3_current_target_w | float(0) > 0 %}
+      {{ 0 - (slot_3_current_target_w | float(0)) }}
+    {% else %}
+      0
+    {% endif %}
+  desired_target_sign_3: >-
+    {% if signed_target_3 | float(0) > 0 %}
+      1
+    {% elif signed_target_3 | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  current_target_for_control_3: >-
+    {% set current = slot_3_current_target_w | float(0) %}
+    {% if battery_3_target_power_uses_absolute_value | bool
+          and desired_target_sign_3 | int(0) == -1
+          and current > 0 %}
+      {{ 0 - current }}
+    {% else %}
+      {{ current }}
+    {% endif %}
+  current_target_sign_for_control_3: >-
+    {% if current_target_for_control_3 | float(0) > 0 %}
+      1
+    {% elif current_target_for_control_3 | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  current_target_rounded_3: "{{ current_target_for_control_3 | float(0) | round(0) | int(0) }}"
+  desired_target_rounded_3: "{{ signed_target_3 | float(0) | round(0) | int(0) }}"
+  target_value_changed_3: "{{ desired_target_rounded_3 | int(0) != current_target_rounded_3 | int(0) }}"
+  same_direction_target_delta_w_3: "{{ (desired_target_rounded_3 | int(0) - current_target_rounded_3 | int(0)) | abs }}"
+  same_direction_small_adjustment_3: >-
+    {{ target_value_changed_3 | bool
+       and desired_target_sign_3 | int(0) != 0
+       and desired_target_sign_3 | int(0) == current_target_sign_for_control_3 | int(0)
+       and same_direction_target_delta_w_3 | float(0) < control_deadband_w | float(0) }}
+  direction_change_blocked_by_cooldown_3: >-
+    {{ desired_target_sign_3 | int(0) != 0
+       and current_target_sign_for_control_3 | int(0) != 0
+       and desired_target_sign_3 | int(0) != current_target_sign_for_control_3 | int(0)
+       and not (triggered_by_off_peak_entity | bool)
+       and slot_3_target_age_s | float(0) < slot_3_response_grace_s | float(0) }}
+  start_from_zero_flow_confirmed_3: >-
+    {{ current_target_sign_for_control_3 | int(0) == 0
+       and allow_confirmed_flow_start_from_zero | bool
+       and (
+         (desired_target_sign_3 | int(0) == 1
+          and house_power_valid
+          and house_power_w | float(0) >= control_deadband_w | float(0)
+          and (
+            battery_3_reactive | bool
+            or discharge_cooldown_ok_3 | bool
+          ))
+         or
+         (desired_target_sign_3 | int(0) == -1
+          and house_power_valid
+          and house_power_w | float(0) <= 0 - (control_deadband_w | float(0))
+          and (
+            battery_3_reactive | bool
+            or charge_cooldown_ok_3 | bool
+          ))
+       ) }}
+  discharge_increase_blocked_by_locked_reduction_3: >-
+    {{ locked_discharge_reduction_pending | bool
+       and signed_target_3 | float(0) > slot_3_current_target_w | float(0)
+       and signed_target_3 | float(0) > 0
+       and (signed_target_3 | float(0) - slot_3_current_target_w | float(0)) > [house_power_w | float(0), 0] | max
+       and not (discharge_export_guard_active | bool) }}
+  should_write_target_power_3: >-
+    {% if not slot_3_target_entity_configured %}
+      false
+    {% elif desired_target_sign_3 | int(0) == 0 %}
+      {{ current_target_sign_for_control_3 | int(0) != 0 }}
+    {% elif direction_change_blocked_by_cooldown_3 | bool %}
+      false
+    {% elif desired_target_sign_3 | int(0) != current_target_sign_for_control_3 | int(0)
+          and current_target_sign_for_control_3 | int(0) != 0 %}
+      true
+    {% elif not (target_value_changed_3 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_3 | bool %}
+      false
+    {% elif discharge_increase_blocked_by_locked_reduction_3 | bool %}
+      false
+    {% elif start_from_zero_flow_confirmed_3 | bool %}
+      true
+    {% elif signed_target_3 | float(0) > 0 %}
+      {{ discharge_cooldown_ok_3
+         or (discharge_export_guard_active
+             and slot_3_current_target_w | float(0) > 0
+             and signed_target_3 | float(0) < slot_3_current_target_w | float(0)) }}
+    {% elif signed_target_3 | float(0) < 0 %}
+      {{ charge_cooldown_ok_3
+         or (
+           operating_mode == 'off_peak_charge'
+           and current_target_sign_for_control_3 | int(0) == 0
+         ) }}
+    {% else %}
+      false
+    {% endif %}
+  should_run_discharge_actions_3: >-
+    {% if not slot_3_has_discharge_actions %}
+      false
+    {% elif direction_change_blocked_by_cooldown_3 | bool %}
+      false
+    {% elif signed_target_3 | float(0) <= 0 %}
+      {{ (
+           current_target_sign_for_control_3 | int(0) == 1
+           and target_value_changed_3 | bool
+         ) or (
+           slot_3_actual_power_usable | bool
+           and slot_3_actual_discharge_w | float(0) > control_deadband_w | float(0)
+           and discharge_cooldown_ok_3 | bool
+         ) }}
+    {% elif discharge_increase_blocked_by_locked_reduction_3 | bool %}
+      false
+    {% elif current_target_sign_for_control_3 | int(0) != 1 %}
+      {{ start_from_zero_flow_confirmed_3 | bool
+         or (responsive_target_allowed_3 | bool and signed_target_3 | float(0) > 0)
+         or current_target_sign_for_control_3 | int(0) != 0 }}
+    {% elif not (target_value_changed_3 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_3 | bool %}
+      false
+    {% else %}
+      {{ discharge_cooldown_ok_3
+         or (discharge_export_guard_active
+             and slot_3_current_target_w | float(0) > 0
+             and signed_target_3 | float(0) < slot_3_current_target_w | float(0)) }}
+    {% endif %}
+  should_run_charge_actions_3: >-
+    {% if not slot_3_has_charge_actions %}
+      false
+    {% elif operating_mode == 'off_peak_charge' %}
+      false
+    {% elif direction_change_blocked_by_cooldown_3 | bool %}
+      false
+    {% elif signed_target_3 | float(0) >= 0 %}
+      {{ (
+           current_target_sign_for_control_3 | int(0) == -1
+           and target_value_changed_3 | bool
+         ) or (
+           slot_3_actual_power_usable | bool
+           and slot_3_actual_charge_w | float(0) > control_deadband_w | float(0)
+           and charge_cooldown_ok_3 | bool
+         ) }}
+    {% elif current_target_sign_for_control_3 | int(0) != -1 %}
+      {{ start_from_zero_flow_confirmed_3 | bool
+         or (operating_mode == 'off_peak_charge' and charge_cooldown_ok_3 | bool)
+         or (responsive_target_allowed_3 | bool and signed_target_3 | float(0) < 0)
+         or current_target_sign_for_control_3 | int(0) != 0 }}
+    {% elif not (target_value_changed_3 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_3 | bool %}
+      false
+    {% else %}
+      {{ charge_cooldown_ok_3 }}
+    {% endif %}
+  should_run_night_charge_actions_3: >-
+    {{ slot_3_has_night_charge_actions | bool
+       and off_peak_active | bool
+       and (
+         off_peak_trigger_entered_active | bool
+         or triggered_by_start_or_reload | bool
+       ) }}
+  
+  responsive_target_allowed_4: >-
+    {{ battery_4_reactive | bool
+       and battery_4_cooldown_seconds | float(0) > 0
+       and (
+         (
+           slot_4_can_discharge | bool
+           and battery_4_cooldown_seconds | float(0) == responsive_discharge_target_cooldown_s | float(0)
+         )
+         or (
+           slot_4_can_charge | bool
+           and battery_4_cooldown_seconds | float(0) == responsive_charge_target_cooldown_s | float(0)
+         )
+       ) }}
+  discharge_active_4: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target_4 >= control_deadband_w | float(0) }}"
+  charge_active_4: "{{ (operating_mode in ['charge', 'charge_hold', 'off_peak_charge'] or emergency_charge_active | bool) and charge_target_4 >= control_deadband_w | float(0) }}"
+  neutral_hold_active_4: "{{ operating_mode == 'neutral' and neutral_target_4 | abs >= control_deadband_w | float(0) }}"
+  signed_target_4: >-
+    {% if discharge_active_4 %}
+      {{ discharge_target_4 | float(0) }}
+    {% elif charge_active_4 %}
+      {{ 0 - (charge_target_4 | float(0)) }}
+    {% elif neutral_hold_active_4 %}
+      {{ neutral_target_4 | float(0) }}
+    {% elif operating_mode == 'off_peak_charge'
+          and slot_4_current_target_w | float(0) < 0 %}
+      {{ slot_4_current_target_w | float(0) }}
+    {% elif operating_mode == 'off_peak_charge'
+          and battery_4_target_power_uses_absolute_value | bool
+          and not (off_peak_trigger_entered_active | bool)
+          and slot_4_current_target_w | float(0) > 0 %}
+      {{ 0 - (slot_4_current_target_w | float(0)) }}
+    {% else %}
+      0
+    {% endif %}
+  desired_target_sign_4: >-
+    {% if signed_target_4 | float(0) > 0 %}
+      1
+    {% elif signed_target_4 | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  current_target_for_control_4: >-
+    {% set current = slot_4_current_target_w | float(0) %}
+    {% if battery_4_target_power_uses_absolute_value | bool
+          and desired_target_sign_4 | int(0) == -1
+          and current > 0 %}
+      {{ 0 - current }}
+    {% else %}
+      {{ current }}
+    {% endif %}
+  current_target_sign_for_control_4: >-
+    {% if current_target_for_control_4 | float(0) > 0 %}
+      1
+    {% elif current_target_for_control_4 | float(0) < 0 %}
+      -1
+    {% else %}
+      0
+    {% endif %}
+  current_target_rounded_4: "{{ current_target_for_control_4 | float(0) | round(0) | int(0) }}"
+  desired_target_rounded_4: "{{ signed_target_4 | float(0) | round(0) | int(0) }}"
+  target_value_changed_4: "{{ desired_target_rounded_4 | int(0) != current_target_rounded_4 | int(0) }}"
+  same_direction_target_delta_w_4: "{{ (desired_target_rounded_4 | int(0) - current_target_rounded_4 | int(0)) | abs }}"
+  same_direction_small_adjustment_4: >-
+    {{ target_value_changed_4 | bool
+       and desired_target_sign_4 | int(0) != 0
+       and desired_target_sign_4 | int(0) == current_target_sign_for_control_4 | int(0)
+       and same_direction_target_delta_w_4 | float(0) < control_deadband_w | float(0) }}
+  direction_change_blocked_by_cooldown_4: >-
+    {{ desired_target_sign_4 | int(0) != 0
+       and current_target_sign_for_control_4 | int(0) != 0
+       and desired_target_sign_4 | int(0) != current_target_sign_for_control_4 | int(0)
+       and not (triggered_by_off_peak_entity | bool)
+       and slot_4_target_age_s | float(0) < slot_4_response_grace_s | float(0) }}
+  start_from_zero_flow_confirmed_4: >-
+    {{ current_target_sign_for_control_4 | int(0) == 0
+       and allow_confirmed_flow_start_from_zero | bool
+       and (
+         (desired_target_sign_4 | int(0) == 1
+          and house_power_valid
+          and house_power_w | float(0) >= control_deadband_w | float(0)
+          and (
+            battery_4_reactive | bool
+            or discharge_cooldown_ok_4 | bool
+          ))
+         or
+         (desired_target_sign_4 | int(0) == -1
+          and house_power_valid
+          and house_power_w | float(0) <= 0 - (control_deadband_w | float(0))
+          and (
+            battery_4_reactive | bool
+            or charge_cooldown_ok_4 | bool
+          ))
+       ) }}
+  discharge_increase_blocked_by_locked_reduction_4: >-
+    {{ locked_discharge_reduction_pending | bool
+       and signed_target_4 | float(0) > slot_4_current_target_w | float(0)
+       and signed_target_4 | float(0) > 0
+       and (signed_target_4 | float(0) - slot_4_current_target_w | float(0)) > [house_power_w | float(0), 0] | max
+       and not (discharge_export_guard_active | bool) }}
+  should_write_target_power_4: >-
+    {% if not slot_4_target_entity_configured %}
+      false
+    {% elif desired_target_sign_4 | int(0) == 0 %}
+      {{ current_target_sign_for_control_4 | int(0) != 0 }}
+    {% elif direction_change_blocked_by_cooldown_4 | bool %}
+      false
+    {% elif desired_target_sign_4 | int(0) != current_target_sign_for_control_4 | int(0)
+          and current_target_sign_for_control_4 | int(0) != 0 %}
+      true
+    {% elif not (target_value_changed_4 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_4 | bool %}
+      false
+    {% elif discharge_increase_blocked_by_locked_reduction_4 | bool %}
+      false
+    {% elif start_from_zero_flow_confirmed_4 | bool %}
+      true
+    {% elif signed_target_4 | float(0) > 0 %}
+      {{ discharge_cooldown_ok_4
+         or (discharge_export_guard_active
+             and slot_4_current_target_w | float(0) > 0
+             and signed_target_4 | float(0) < slot_4_current_target_w | float(0)) }}
+    {% elif signed_target_4 | float(0) < 0 %}
+      {{ charge_cooldown_ok_4
+         or (
+           operating_mode == 'off_peak_charge'
+           and current_target_sign_for_control_4 | int(0) == 0
+         ) }}
+    {% else %}
+      false
+    {% endif %}
+  should_run_discharge_actions_4: >-
+    {% if not slot_4_has_discharge_actions %}
+      false
+    {% elif direction_change_blocked_by_cooldown_4 | bool %}
+      false
+    {% elif signed_target_4 | float(0) <= 0 %}
+      {{ (
+           current_target_sign_for_control_4 | int(0) == 1
+           and target_value_changed_4 | bool
+         ) or (
+           slot_4_actual_power_usable | bool
+           and slot_4_actual_discharge_w | float(0) > control_deadband_w | float(0)
+           and discharge_cooldown_ok_4 | bool
+         ) }}
+    {% elif discharge_increase_blocked_by_locked_reduction_4 | bool %}
+      false
+    {% elif current_target_sign_for_control_4 | int(0) != 1 %}
+      {{ start_from_zero_flow_confirmed_4 | bool
+         or (responsive_target_allowed_4 | bool and signed_target_4 | float(0) > 0)
+         or current_target_sign_for_control_4 | int(0) != 0 }}
+    {% elif not (target_value_changed_4 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_4 | bool %}
+      false
+    {% else %}
+      {{ discharge_cooldown_ok_4
+         or (discharge_export_guard_active
+             and slot_4_current_target_w | float(0) > 0
+             and signed_target_4 | float(0) < slot_4_current_target_w | float(0)) }}
+    {% endif %}
+  should_run_charge_actions_4: >-
+    {% if not slot_4_has_charge_actions %}
+      false
+    {% elif operating_mode == 'off_peak_charge' %}
+      false
+    {% elif direction_change_blocked_by_cooldown_4 | bool %}
+      false
+    {% elif signed_target_4 | float(0) >= 0 %}
+      {{ (
+           current_target_sign_for_control_4 | int(0) == -1
+           and target_value_changed_4 | bool
+         ) or (
+           slot_4_actual_power_usable | bool
+           and slot_4_actual_charge_w | float(0) > control_deadband_w | float(0)
+           and charge_cooldown_ok_4 | bool
+         ) }}
+    {% elif current_target_sign_for_control_4 | int(0) != -1 %}
+      {{ start_from_zero_flow_confirmed_4 | bool
+         or (operating_mode == 'off_peak_charge' and charge_cooldown_ok_4 | bool)
+         or (responsive_target_allowed_4 | bool and signed_target_4 | float(0) < 0)
+         or current_target_sign_for_control_4 | int(0) != 0 }}
+    {% elif not (target_value_changed_4 | bool) %}
+      false
+    {% elif same_direction_small_adjustment_4 | bool %}
+      false
+    {% else %}
+      {{ charge_cooldown_ok_4 }}
+    {% endif %}
+  should_run_night_charge_actions_4: >-
+    {{ slot_4_has_night_charge_actions | bool
+       and off_peak_active | bool
+       and (
+         off_peak_trigger_entered_active | bool
+         or triggered_by_start_or_reload | bool
+       ) }}
+  pending_slot_target_updates: >-
+    {{
+      (should_write_target_power_1 | bool)
+      or (should_write_target_power_2 | bool)
+      or (should_write_target_power_3 | bool)
+      or (should_write_target_power_4 | bool)
+    }}
+  pending_slot_actions: >-
+    {{
+      (should_run_discharge_actions_1 | bool)
+      or (should_run_discharge_actions_2 | bool)
+      or (should_run_discharge_actions_3 | bool)
+      or (should_run_discharge_actions_4 | bool)
+      or (should_run_charge_actions_1 | bool)
+      or (should_run_charge_actions_2 | bool)
+      or (should_run_charge_actions_3 | bool)
+      or (should_run_charge_actions_4 | bool)
+      or (should_run_night_charge_actions_1 | bool)
+      or (should_run_night_charge_actions_2 | bool)
+      or (should_run_night_charge_actions_3 | bool)
+      or (should_run_night_charge_actions_4 | bool)
+    }}
+  should_stop_small_house_power_delta: >-
+    {{
+      (should_skip_small_house_power_delta | bool)
+      and not (pending_slot_target_updates | bool)
+      and not (pending_slot_actions | bool)
+    }}
+  run_log_reason: >-
+    {% if should_stop_small_house_power_delta %}
+      small_delta_skipped
+    {% elif operating_mode == 'invalid_sensor' %}
+      invalid_sensor
+    {% else %}
+      {{ operating_mode }}
+    {% endif %}
+  run_log_slots_json: >-
+    {{ {
+      '1': {
+        'used': slot_1_used | bool,
+        'soc': slot_1_soc | float(0),
+        'headroom_priority': slot_1_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
+        'cooldown_s': battery_1_cooldown_seconds | float(0),
+        'max_discharge_w': battery_1_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_1_min_discharge_soc_pct | float(0),
+        'soft_low_soc_priority': (slot_1_can_discharge | bool) and not (slot_1_discharge_delivery_stalled | bool) and slot_1_soc | float(0) <= battery_1_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
+        'max_charge_w': battery_1_max_charge_w | float(0),
+        'current_target_w': slot_1_current_target_w | float(0),
+        'signed_target_w': signed_target_1 | float(0),
+        'discharge_target_w': discharge_target_1 | float(0),
+        'charge_target_w': charge_target_1 | float(0),
+        'neutral_target_w': neutral_target_1 | float(0),
+        'actual_discharge_w': slot_1_actual_discharge_w | float(0),
+        'actual_charge_w': slot_1_actual_charge_w | float(0),
+        'actual_power_fresh': slot_1_actual_power_fresh | bool,
+        'actual_power_stale': slot_1_actual_power_stale | bool,
+        'actual_power_usable': slot_1_actual_power_usable | bool,
+        'actual_power_age_s': slot_1_actual_power_age_s | float(999999),
+        'target_age_s': slot_1_target_age_s | float(0),
+        'response_grace_s': slot_1_response_grace_s | float(0),
+        'discharge_delivery_stalled': slot_1_discharge_delivery_stalled | bool,
+        'can_charge': slot_1_can_charge | bool,
+        'discharge_available': (slot_1_can_discharge | bool) and not (slot_1_discharge_delivery_stalled | bool),
+        'discharge_locked': (not (discharge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) > 0 and not (slot_1_discharge_delivery_stalled | bool),
+        'charge_locked': (not (charge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) < 0,
+        'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_1 | bool,
+        'should_write_target': should_write_target_power_1 | bool,
+        'should_run_discharge_actions': should_run_discharge_actions_1 | bool,
+        'should_run_charge_actions': should_run_charge_actions_1 | bool,
+        'should_run_night_charge_actions': should_run_night_charge_actions_1 | bool
+      },
+      '2': {
+        'used': slot_2_used | bool,
+        'soc': slot_2_soc | float(0),
+        'headroom_priority': slot_2_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
+        'cooldown_s': battery_2_cooldown_seconds | float(0),
+        'max_discharge_w': battery_2_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_2_min_discharge_soc_pct | float(0),
+        'soft_low_soc_priority': (slot_2_can_discharge | bool) and not (slot_2_discharge_delivery_stalled | bool) and slot_2_soc | float(0) <= battery_2_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
+        'max_charge_w': battery_2_max_charge_w | float(0),
+        'current_target_w': slot_2_current_target_w | float(0),
+        'signed_target_w': signed_target_2 | float(0),
+        'discharge_target_w': discharge_target_2 | float(0),
+        'charge_target_w': charge_target_2 | float(0),
+        'neutral_target_w': neutral_target_2 | float(0),
+        'actual_discharge_w': slot_2_actual_discharge_w | float(0),
+        'actual_charge_w': slot_2_actual_charge_w | float(0),
+        'actual_power_fresh': slot_2_actual_power_fresh | bool,
+        'actual_power_stale': slot_2_actual_power_stale | bool,
+        'actual_power_usable': slot_2_actual_power_usable | bool,
+        'actual_power_age_s': slot_2_actual_power_age_s | float(999999),
+        'target_age_s': slot_2_target_age_s | float(0),
+        'response_grace_s': slot_2_response_grace_s | float(0),
+        'discharge_delivery_stalled': slot_2_discharge_delivery_stalled | bool,
+        'can_charge': slot_2_can_charge | bool,
+        'discharge_available': (slot_2_can_discharge | bool) and not (slot_2_discharge_delivery_stalled | bool),
+        'discharge_locked': (not (discharge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) > 0 and not (slot_2_discharge_delivery_stalled | bool),
+        'charge_locked': (not (charge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) < 0,
+        'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_2 | bool,
+        'should_write_target': should_write_target_power_2 | bool,
+        'should_run_discharge_actions': should_run_discharge_actions_2 | bool,
+        'should_run_charge_actions': should_run_charge_actions_2 | bool,
+        'should_run_night_charge_actions': should_run_night_charge_actions_2 | bool
+      },
+      '3': {
+        'used': slot_3_used | bool,
+        'soc': slot_3_soc | float(0),
+        'headroom_priority': slot_3_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
+        'cooldown_s': battery_3_cooldown_seconds | float(0),
+        'max_discharge_w': battery_3_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_3_min_discharge_soc_pct | float(0),
+        'soft_low_soc_priority': (slot_3_can_discharge | bool) and not (slot_3_discharge_delivery_stalled | bool) and slot_3_soc | float(0) <= battery_3_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
+        'max_charge_w': battery_3_max_charge_w | float(0),
+        'current_target_w': slot_3_current_target_w | float(0),
+        'signed_target_w': signed_target_3 | float(0),
+        'discharge_target_w': discharge_target_3 | float(0),
+        'charge_target_w': charge_target_3 | float(0),
+        'neutral_target_w': neutral_target_3 | float(0),
+        'actual_discharge_w': slot_3_actual_discharge_w | float(0),
+        'actual_charge_w': slot_3_actual_charge_w | float(0),
+        'actual_power_fresh': slot_3_actual_power_fresh | bool,
+        'actual_power_stale': slot_3_actual_power_stale | bool,
+        'actual_power_usable': slot_3_actual_power_usable | bool,
+        'actual_power_age_s': slot_3_actual_power_age_s | float(999999),
+        'target_age_s': slot_3_target_age_s | float(0),
+        'response_grace_s': slot_3_response_grace_s | float(0),
+        'discharge_delivery_stalled': slot_3_discharge_delivery_stalled | bool,
+        'can_charge': slot_3_can_charge | bool,
+        'discharge_available': (slot_3_can_discharge | bool) and not (slot_3_discharge_delivery_stalled | bool),
+        'discharge_locked': (not (discharge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) > 0 and not (slot_3_discharge_delivery_stalled | bool),
+        'charge_locked': (not (charge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) < 0,
+        'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_3 | bool,
+        'should_write_target': should_write_target_power_3 | bool,
+        'should_run_discharge_actions': should_run_discharge_actions_3 | bool,
+        'should_run_charge_actions': should_run_charge_actions_3 | bool,
+        'should_run_night_charge_actions': should_run_night_charge_actions_3 | bool
+      },
+      '4': {
+        'used': slot_4_used | bool,
+        'soc': slot_4_soc | float(0),
+        'headroom_priority': slot_4_soc | float(0) >= high_soc_headroom_threshold_pct | float(0),
+        'cooldown_s': battery_4_cooldown_seconds | float(0),
+        'max_discharge_w': battery_4_max_discharge_w | float(0),
+        'min_discharge_soc_pct': battery_4_min_discharge_soc_pct | float(0),
+        'soft_low_soc_priority': (slot_4_can_discharge | bool) and not (slot_4_discharge_delivery_stalled | bool) and slot_4_soc | float(0) <= battery_4_min_discharge_soc_pct | float(0) + low_soc_priority_margin_pct | float(0),
+        'max_charge_w': battery_4_max_charge_w | float(0),
+        'current_target_w': slot_4_current_target_w | float(0),
+        'signed_target_w': signed_target_4 | float(0),
+        'discharge_target_w': discharge_target_4 | float(0),
+        'charge_target_w': charge_target_4 | float(0),
+        'neutral_target_w': neutral_target_4 | float(0),
+        'actual_discharge_w': slot_4_actual_discharge_w | float(0),
+        'actual_charge_w': slot_4_actual_charge_w | float(0),
+        'actual_power_fresh': slot_4_actual_power_fresh | bool,
+        'actual_power_stale': slot_4_actual_power_stale | bool,
+        'actual_power_usable': slot_4_actual_power_usable | bool,
+        'actual_power_age_s': slot_4_actual_power_age_s | float(999999),
+        'target_age_s': slot_4_target_age_s | float(0),
+        'response_grace_s': slot_4_response_grace_s | float(0),
+        'discharge_delivery_stalled': slot_4_discharge_delivery_stalled | bool,
+        'can_charge': slot_4_can_charge | bool,
+        'discharge_available': (slot_4_can_discharge | bool) and not (slot_4_discharge_delivery_stalled | bool),
+        'discharge_locked': (not (discharge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) > 0 and not (slot_4_discharge_delivery_stalled | bool),
+        'charge_locked': (not (charge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) < 0,
+        'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_4 | bool,
+        'should_write_target': should_write_target_power_4 | bool,
+        'should_run_discharge_actions': should_run_discharge_actions_4 | bool,
+        'should_run_charge_actions': should_run_charge_actions_4 | bool,
+        'should_run_night_charge_actions': should_run_night_charge_actions_4 | bool
+      }
+    } | tojson }}
+
+actions:
+  - alias: "Emit full run log event"
+    event: home_battery_blueprint_run
+    event_data:
+      reason: "{{ run_log_reason }}"
+      trigger_entity_id: "{{ trigger_entity_id }}"
+      triggered_by_house_power_sensor: "{{ triggered_by_house_power_sensor }}"
+      triggered_by_off_peak_entity: "{{ triggered_by_off_peak_entity }}"
+      triggered_by_start_or_reload: "{{ triggered_by_start_or_reload }}"
+      off_peak_trigger_entered_active: "{{ off_peak_trigger_entered_active }}"
+      operating_mode: "{{ operating_mode }}"
+      off_peak_active: "{{ off_peak_active }}"
+      house_power_valid: "{{ house_power_valid }}"
+      house_power_w: "{{ house_power_w | float(0) | round(1) }}"
+      adjusted_house_power_w: "{{ adjusted_house_power_w | float(0) | round(1) }}"
+      import_need_w: "{{ import_need_w | float(0) | round(1) }}"
+      export_surplus_w: "{{ export_surplus_w | float(0) | round(1) }}"
+      current_total_discharge_w: "{{ current_total_discharge_w | float(0) | round(1) }}"
+      current_total_charge_w: "{{ current_total_charge_w | float(0) | round(1) }}"
+      zero_target_actual_discharge_w: "{{ zero_target_actual_discharge_w | float(0) | round(1) }}"
+      zero_target_actual_charge_w: "{{ zero_target_actual_charge_w | float(0) | round(1) }}"
+      planned_discharge_total_w: "{{ planned_discharge_total_w | float(0) | round(1) }}"
+      planned_charge_total_w: "{{ planned_charge_total_w | float(0) | round(1) }}"
+      corrected_import_need_w: "{{ corrected_import_need_w | float(0) | round(1) }}"
+      corrected_export_surplus_w: "{{ corrected_export_surplus_w | float(0) | round(1) }}"
+      possible_duplicate_discharge_w: "{{ possible_duplicate_discharge_w | float(0) | round(1) }}"
+      possible_duplicate_charge_w: "{{ possible_duplicate_charge_w | float(0) | round(1) }}"
+      discharge_increase_budget_w: "{{ discharge_increase_budget_w | float(0) | round(1) }}"
+      discharge_increase_step_w: "{{ discharge_increase_step_w | float(0) | round(1) }}"
+      responsive_discharge_increase_step_w: "{{ responsive_discharge_increase_step_w | float(0) | round(1) }}"
+      strong_import_threshold_w: "{{ strong_import_threshold_w | float(0) | round(1) }}"
+      strong_import_discharge_increase_step_w: "{{ strong_import_discharge_increase_step_w | float(0) | round(1) }}"
+      strong_import_discharge_budget_share_pct: "{{ strong_import_discharge_budget_share_pct | float(0) | round(1) }}"
+      low_soc_priority_margin_pct: "{{ low_soc_priority_margin_pct | float(0) | round(1) }}"
+      low_soc_priority_gap_pct: "{{ low_soc_priority_gap_pct | float(0) | round(1) }}"
+      soft_low_discharge_priority_active: "{{ soft_low_discharge_priority_active }}"
+      discharge_export_guard_w: "{{ discharge_export_guard_w | float(0) | round(1) }}"
+      responsive_discharge_export_trim_w: "{{ responsive_discharge_export_trim_w | float(0) | round(1) }}"
+      cooldown_ready_discharge_export_trim_w: "{{ cooldown_ready_discharge_export_trim_w | float(0) | round(1) }}"
+      discharge_trimmed_locked_w: "{{ discharge_trimmed_locked_w | float(0) | round(1) }}"
+      unresolved_raw_export_w: "{{ unresolved_raw_export_w | float(0) | round(1) }}"
+      chargeable_raw_export_w: "{{ chargeable_raw_export_w | float(0) | round(1) }}"
+      export_latency_brake_w: "{{ export_latency_brake_w | float(0) | round(1) }}"
+      emergency_charge_surplus_w: "{{ emergency_charge_surplus_w | float(0) | round(1) }}"
+      opportunistic_charge_threshold_w: "{{ opportunistic_charge_threshold_w | float(0) | round(1) }}"
+      validation_errors: "{{ validation_errors | tojson }}"
+      discharge_targets: "{{ discharge_targets | tojson }}"
+      charge_targets: "{{ charge_targets | tojson }}"
+      neutral_targets: "{{ neutral_targets | tojson }}"
+      slots: "{{ run_log_slots_json | from_json }}"
+
+  # During off-peak periods, custom night-charge actions own the battery mode
+  # and charge power. Keep them short/idempotent, or call script.turn_on.
+  - alias: "Battery 1: run night charge actions"
+    choose:
+      - alias: "Battery 1: night charge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_night_charge_actions_1 }}"
+        sequence:
+          - alias: "Battery 1: prepare night charge action context"
+            variables:
+              battery_slot: 1
+              battery_soc: "{{ slot_1_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_1 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_1 | float(0) }}"
+              target_charge_w: "{{ charge_target_1 | float(0) }}"
+          - alias: "Battery 1: execute night charge action sequence"
+            choose: []
+            default: !input battery_1_night_charge_actions
+  
+  - alias: "Battery 2: run night charge actions"
+    choose:
+      - alias: "Battery 2: night charge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_night_charge_actions_2 }}"
+        sequence:
+          - alias: "Battery 2: prepare night charge action context"
+            variables:
+              battery_slot: 2
+              battery_soc: "{{ slot_2_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_2 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_2 | float(0) }}"
+              target_charge_w: "{{ charge_target_2 | float(0) }}"
+          - alias: "Battery 2: execute night charge action sequence"
+            choose: []
+            default: !input battery_2_night_charge_actions
+  
+  - alias: "Battery 3: run night charge actions"
+    choose:
+      - alias: "Battery 3: night charge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_night_charge_actions_3 }}"
+        sequence:
+          - alias: "Battery 3: prepare night charge action context"
+            variables:
+              battery_slot: 3
+              battery_soc: "{{ slot_3_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_3 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_3 | float(0) }}"
+              target_charge_w: "{{ charge_target_3 | float(0) }}"
+          - alias: "Battery 3: execute night charge action sequence"
+            choose: []
+            default: !input battery_3_night_charge_actions
+  
+  - alias: "Battery 4: run night charge actions"
+    choose:
+      - alias: "Battery 4: night charge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_night_charge_actions_4 }}"
+        sequence:
+          - alias: "Battery 4: prepare night charge action context"
+            variables:
+              battery_slot: 4
+              battery_soc: "{{ slot_4_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_4 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_4 | float(0) }}"
+              target_charge_w: "{{ charge_target_4 | float(0) }}"
+          - alias: "Battery 4: execute night charge action sequence"
+            choose: []
+            default: !input battery_4_night_charge_actions
+
+  - alias: "Off-peak actions-only guardrail"
+    choose:
+      - alias: "Off-peak period active"
+        conditions:
+          - condition: template
+            value_template: "{{ off_peak_active }}"
+        sequence:
+          - alias: "Stop after night charge actions"
+            stop: "Off-peak period active: night charge actions have been handled, normal target control is skipped."
+
+  - alias: "Validation and sensor guardrails"
+    choose:
+      - alias: "Small house power delta"
+        conditions:
+          - condition: template
+            value_template: "{{ should_stop_small_house_power_delta }}"
+        sequence:
+          - alias: "Stop on small house power delta"
+            stop: >-
+              House power sensor delta below trigger threshold:
+              {{ house_power_trigger_delta_w | float(0) | round(1) }} W < {{ control_deadband_w | float(0) | round(1) }} W.
+
+      - alias: "Invalid house power sensor"
+        conditions:
+          - condition: template
+            value_template: "{{ operating_mode == 'invalid_sensor' }}"
+        sequence:
+          - alias: "Stop on sensor error"
+            stop: >-
+              House power sensor {{ house_power_sensor }} is unavailable or not numeric.
+  # Generated slot actions keep the signed target entity updated and
+  # optionally run active-mode custom actions for charge/discharge integrations.
+  - alias: "Battery 1: update signed target"
+    choose:
+      - alias: "Battery 1: target update required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_write_target_power_1 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 1: prepare target update context"
+            variables:
+              battery_slot: 1
+              battery_soc: "{{ slot_1_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_1 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_1 | float(0) }}"
+              target_charge_w: "{{ charge_target_1 | float(0) }}"
+              target_power_value: >-
+                {% set signed = signed_target_1 | float(0) %}
+                {% if battery_1_target_power_uses_absolute_value | bool %}
+                  {{ signed | abs | round(0) | int(0) }}
+                {% else %}
+                  {{ signed | round(0) | int(0) }}
+                {% endif %}
+          - alias: "Battery 1: select target entity service"
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ battery_1_target_power_entity.startswith('number.') }}"
+                sequence:
+                  - alias: "Battery 1: write target to number entity"
+                    action: number.set_value
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ battery_1_target_power_entity }}"
+                    data:
+                      value: >-
+                        {% set entity_min = state_attr(battery_1_target_power_entity, 'min') %}
+                        {% if target_power_value | int(0) > 0
+                              and entity_min is number
+                              and entity_min | float(0) > 0
+                              and target_power_value | int(0) < entity_min | float(0) %}
+                          {% if house_power_w | float(0) < 0 %}
+                            0
+                          {% else %}
+                            {{ entity_min | float(0) | round(0) | int(0) }}
+                          {% endif %}
+                        {% else %}
+                          {{ target_power_value | int(0) }}
+                        {% endif %}
+              - conditions:
+                  - condition: template
+                    value_template: "{{ battery_1_target_power_entity.startswith('input_number.') }}"
+                sequence:
+                  - alias: "Battery 1: write target to input_number entity"
+                    action: input_number.set_value
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ battery_1_target_power_entity }}"
+                    data:
+                      value: >-
+                        {% set entity_min = state_attr(battery_1_target_power_entity, 'min') %}
+                        {% if target_power_value | int(0) > 0
+                              and entity_min is number
+                              and entity_min | float(0) > 0
+                              and target_power_value | int(0) < entity_min | float(0) %}
+                          {% if house_power_w | float(0) < 0 %}
+                            0
+                          {% else %}
+                            {{ entity_min | float(0) | round(0) | int(0) }}
+                          {% endif %}
+                        {% else %}
+                          {{ target_power_value | int(0) }}
+                        {% endif %}
+  - alias: "Battery 1: run discharge actions"
+    choose:
+      - alias: "Battery 1: discharge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_discharge_actions_1 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 1: prepare discharge action context"
+            variables:
+              battery_slot: 1
+              battery_soc: "{{ slot_1_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_1 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_1 | float(0) }}"
+              target_charge_w: "{{ charge_target_1 | float(0) }}"
+          - alias: "Battery 1: execute discharge action sequence"
+            choose: []
+            default: !input battery_1_discharge_actions
+  - alias: "Battery 1: run charge actions"
+    choose:
+      - alias: "Battery 1: charge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_charge_actions_1 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 1: prepare charge action context"
+            variables:
+              battery_slot: 1
+              battery_soc: "{{ slot_1_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_1 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_1 | float(0) }}"
+              target_charge_w: "{{ charge_target_1 | float(0) }}"
+          - alias: "Battery 1: execute charge action sequence"
+            choose: []
+            default: !input battery_1_charge_actions
+  
+  - alias: "Battery 2: update signed target"
+    choose:
+      - alias: "Battery 2: target update required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_write_target_power_2 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 2: prepare target update context"
+            variables:
+              battery_slot: 2
+              battery_soc: "{{ slot_2_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_2 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_2 | float(0) }}"
+              target_charge_w: "{{ charge_target_2 | float(0) }}"
+              target_power_value: >-
+                {% set signed = signed_target_2 | float(0) %}
+                {% if battery_2_target_power_uses_absolute_value | bool %}
+                  {{ signed | abs | round(0) | int(0) }}
+                {% else %}
+                  {{ signed | round(0) | int(0) }}
+                {% endif %}
+          - alias: "Battery 2: select target entity service"
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ battery_2_target_power_entity.startswith('number.') }}"
+                sequence:
+                  - alias: "Battery 2: write target to number entity"
+                    action: number.set_value
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ battery_2_target_power_entity }}"
+                    data:
+                      value: >-
+                        {% set entity_min = state_attr(battery_2_target_power_entity, 'min') %}
+                        {% if target_power_value | int(0) > 0
+                              and entity_min is number
+                              and entity_min | float(0) > 0
+                              and target_power_value | int(0) < entity_min | float(0) %}
+                          {% if house_power_w | float(0) < 0 %}
+                            0
+                          {% else %}
+                            {{ entity_min | float(0) | round(0) | int(0) }}
+                          {% endif %}
+                        {% else %}
+                          {{ target_power_value | int(0) }}
+                        {% endif %}
+              - conditions:
+                  - condition: template
+                    value_template: "{{ battery_2_target_power_entity.startswith('input_number.') }}"
+                sequence:
+                  - alias: "Battery 2: write target to input_number entity"
+                    action: input_number.set_value
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ battery_2_target_power_entity }}"
+                    data:
+                      value: >-
+                        {% set entity_min = state_attr(battery_2_target_power_entity, 'min') %}
+                        {% if target_power_value | int(0) > 0
+                              and entity_min is number
+                              and entity_min | float(0) > 0
+                              and target_power_value | int(0) < entity_min | float(0) %}
+                          {% if house_power_w | float(0) < 0 %}
+                            0
+                          {% else %}
+                            {{ entity_min | float(0) | round(0) | int(0) }}
+                          {% endif %}
+                        {% else %}
+                          {{ target_power_value | int(0) }}
+                        {% endif %}
+  - alias: "Battery 2: run discharge actions"
+    choose:
+      - alias: "Battery 2: discharge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_discharge_actions_2 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 2: prepare discharge action context"
+            variables:
+              battery_slot: 2
+              battery_soc: "{{ slot_2_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_2 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_2 | float(0) }}"
+              target_charge_w: "{{ charge_target_2 | float(0) }}"
+          - alias: "Battery 2: execute discharge action sequence"
+            choose: []
+            default: !input battery_2_discharge_actions
+  - alias: "Battery 2: run charge actions"
+    choose:
+      - alias: "Battery 2: charge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_charge_actions_2 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 2: prepare charge action context"
+            variables:
+              battery_slot: 2
+              battery_soc: "{{ slot_2_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_2 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_2 | float(0) }}"
+              target_charge_w: "{{ charge_target_2 | float(0) }}"
+          - alias: "Battery 2: execute charge action sequence"
+            choose: []
+            default: !input battery_2_charge_actions
+  
+  - alias: "Battery 3: update signed target"
+    choose:
+      - alias: "Battery 3: target update required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_write_target_power_3 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 3: prepare target update context"
+            variables:
+              battery_slot: 3
+              battery_soc: "{{ slot_3_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_3 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_3 | float(0) }}"
+              target_charge_w: "{{ charge_target_3 | float(0) }}"
+              target_power_value: >-
+                {% set signed = signed_target_3 | float(0) %}
+                {% if battery_3_target_power_uses_absolute_value | bool %}
+                  {{ signed | abs | round(0) | int(0) }}
+                {% else %}
+                  {{ signed | round(0) | int(0) }}
+                {% endif %}
+          - alias: "Battery 3: select target entity service"
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ battery_3_target_power_entity.startswith('number.') }}"
+                sequence:
+                  - alias: "Battery 3: write target to number entity"
+                    action: number.set_value
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ battery_3_target_power_entity }}"
+                    data:
+                      value: >-
+                        {% set entity_min = state_attr(battery_3_target_power_entity, 'min') %}
+                        {% if target_power_value | int(0) > 0
+                              and entity_min is number
+                              and entity_min | float(0) > 0
+                              and target_power_value | int(0) < entity_min | float(0) %}
+                          {% if house_power_w | float(0) < 0 %}
+                            0
+                          {% else %}
+                            {{ entity_min | float(0) | round(0) | int(0) }}
+                          {% endif %}
+                        {% else %}
+                          {{ target_power_value | int(0) }}
+                        {% endif %}
+              - conditions:
+                  - condition: template
+                    value_template: "{{ battery_3_target_power_entity.startswith('input_number.') }}"
+                sequence:
+                  - alias: "Battery 3: write target to input_number entity"
+                    action: input_number.set_value
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ battery_3_target_power_entity }}"
+                    data:
+                      value: >-
+                        {% set entity_min = state_attr(battery_3_target_power_entity, 'min') %}
+                        {% if target_power_value | int(0) > 0
+                              and entity_min is number
+                              and entity_min | float(0) > 0
+                              and target_power_value | int(0) < entity_min | float(0) %}
+                          {% if house_power_w | float(0) < 0 %}
+                            0
+                          {% else %}
+                            {{ entity_min | float(0) | round(0) | int(0) }}
+                          {% endif %}
+                        {% else %}
+                          {{ target_power_value | int(0) }}
+                        {% endif %}
+  - alias: "Battery 3: run discharge actions"
+    choose:
+      - alias: "Battery 3: discharge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_discharge_actions_3 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 3: prepare discharge action context"
+            variables:
+              battery_slot: 3
+              battery_soc: "{{ slot_3_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_3 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_3 | float(0) }}"
+              target_charge_w: "{{ charge_target_3 | float(0) }}"
+          - alias: "Battery 3: execute discharge action sequence"
+            choose: []
+            default: !input battery_3_discharge_actions
+  - alias: "Battery 3: run charge actions"
+    choose:
+      - alias: "Battery 3: charge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_charge_actions_3 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 3: prepare charge action context"
+            variables:
+              battery_slot: 3
+              battery_soc: "{{ slot_3_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_3 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_3 | float(0) }}"
+              target_charge_w: "{{ charge_target_3 | float(0) }}"
+          - alias: "Battery 3: execute charge action sequence"
+            choose: []
+            default: !input battery_3_charge_actions
+  
+  - alias: "Battery 4: update signed target"
+    choose:
+      - alias: "Battery 4: target update required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_write_target_power_4 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 4: prepare target update context"
+            variables:
+              battery_slot: 4
+              battery_soc: "{{ slot_4_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_4 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_4 | float(0) }}"
+              target_charge_w: "{{ charge_target_4 | float(0) }}"
+              target_power_value: >-
+                {% set signed = signed_target_4 | float(0) %}
+                {% if battery_4_target_power_uses_absolute_value | bool %}
+                  {{ signed | abs | round(0) | int(0) }}
+                {% else %}
+                  {{ signed | round(0) | int(0) }}
+                {% endif %}
+          - alias: "Battery 4: select target entity service"
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ battery_4_target_power_entity.startswith('number.') }}"
+                sequence:
+                  - alias: "Battery 4: write target to number entity"
+                    action: number.set_value
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ battery_4_target_power_entity }}"
+                    data:
+                      value: >-
+                        {% set entity_min = state_attr(battery_4_target_power_entity, 'min') %}
+                        {% if target_power_value | int(0) > 0
+                              and entity_min is number
+                              and entity_min | float(0) > 0
+                              and target_power_value | int(0) < entity_min | float(0) %}
+                          {% if house_power_w | float(0) < 0 %}
+                            0
+                          {% else %}
+                            {{ entity_min | float(0) | round(0) | int(0) }}
+                          {% endif %}
+                        {% else %}
+                          {{ target_power_value | int(0) }}
+                        {% endif %}
+              - conditions:
+                  - condition: template
+                    value_template: "{{ battery_4_target_power_entity.startswith('input_number.') }}"
+                sequence:
+                  - alias: "Battery 4: write target to input_number entity"
+                    action: input_number.set_value
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ battery_4_target_power_entity }}"
+                    data:
+                      value: >-
+                        {% set entity_min = state_attr(battery_4_target_power_entity, 'min') %}
+                        {% if target_power_value | int(0) > 0
+                              and entity_min is number
+                              and entity_min | float(0) > 0
+                              and target_power_value | int(0) < entity_min | float(0) %}
+                          {% if house_power_w | float(0) < 0 %}
+                            0
+                          {% else %}
+                            {{ entity_min | float(0) | round(0) | int(0) }}
+                          {% endif %}
+                        {% else %}
+                          {{ target_power_value | int(0) }}
+                        {% endif %}
+  - alias: "Battery 4: run discharge actions"
+    choose:
+      - alias: "Battery 4: discharge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_discharge_actions_4 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 4: prepare discharge action context"
+            variables:
+              battery_slot: 4
+              battery_soc: "{{ slot_4_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_4 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_4 | float(0) }}"
+              target_charge_w: "{{ charge_target_4 | float(0) }}"
+          - alias: "Battery 4: execute discharge action sequence"
+            choose: []
+            default: !input battery_4_discharge_actions
+  - alias: "Battery 4: run charge actions"
+    choose:
+      - alias: "Battery 4: charge actions required"
+        conditions:
+          - condition: template
+            value_template: "{{ should_run_charge_actions_4 }}"
+          - condition: template
+            value_template: "{{ house_power_valid }}"
+        sequence:
+          - alias: "Battery 4: prepare charge action context"
+            variables:
+              battery_slot: 4
+              battery_soc: "{{ slot_4_soc }}"
+              house_power_w: "{{ house_power_w }}"
+              import_need_w: "{{ import_need_w }}"
+              export_surplus_w: "{{ export_surplus_w }}"
+              off_peak_active: "{{ off_peak_active }}"
+              target_power_w: "{{ signed_target_4 | float(0) }}"
+              target_discharge_w: "{{ discharge_target_4 | float(0) }}"
+              target_charge_w: "{{ charge_target_4 | float(0) }}"
+          - alias: "Battery 4: execute charge action sequence"
+            choose: []
+            default: !input battery_4_charge_actions
