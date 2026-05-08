@@ -14,6 +14,56 @@ responsive_target_allowed___SLOT__: >-
 discharge_active___SLOT__: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target___SLOT__ >= control_deadband_w | float(0) }}"
 charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold', 'off_peak_charge'] or emergency_charge_active | bool) and charge_target___SLOT__ >= control_deadband_w | float(0) }}"
 neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target___SLOT__ | abs >= control_deadband_w | float(0) }}"
+night_charge_retry_interval_s___SLOT__: "{{ [60, battery___SLOT___cooldown_seconds | float(0) * 3] | max }}"
+night_charge_full___SLOT__: >-
+  {{ slot___SLOT___can_charge | bool
+     and slot___SLOT___soc | float(0) >= off_peak_charge_full_soc_pct | float(95) }}
+night_charge_candidate___SLOT__: >-
+  {{ slot___SLOT___can_charge | bool
+     and slot___SLOT___soc | float(0) < off_peak_charge_full_soc_pct | float(95) }}
+night_charge_confirmed___SLOT__: >-
+  {{ slot___SLOT___actual_power_usable | bool
+     and slot___SLOT___actual_charge_w | float(0) > control_deadband_w | float(0) }}
+night_charge_retry_due___SLOT__: >-
+  {% set retry_interval = night_charge_retry_interval_s___SLOT__ | float(60) %}
+  {{ off_peak_active | bool
+     and slot___SLOT___has_night_charge_actions | bool
+     and night_charge_candidate___SLOT__ | bool
+     and not (night_charge_confirmed___SLOT__ | bool)
+     and (
+       off_peak_trigger_entered_active | bool
+       or triggered_by_start_or_reload | bool
+       or (
+         triggered_by_house_power_sensor | bool
+         and off_peak_active_age_s | float(0) >= retry_interval
+         and slot___SLOT___target_age_s | float(0) >= retry_interval
+         and ((off_peak_active_age_s | float(0)) % retry_interval) < 60
+       )
+     ) }}
+should_stop_off_peak_discharge___SLOT__: >-
+  {{ off_peak_active | bool
+     and slot___SLOT___target_entity_configured | bool
+     and (
+       (
+         slot___SLOT___actual_power_usable | bool
+         and slot___SLOT___actual_discharge_w | float(0) > control_deadband_w | float(0)
+         and (slot___SLOT___current_target_w | float(0) | abs) > control_deadband_w | float(0)
+       )
+       or (
+         slot___SLOT___current_target_w | float(0) > control_deadband_w | float(0)
+         and not (night_charge_confirmed___SLOT__ | bool)
+         and (
+           triggered_by_off_peak_entity | bool
+           or triggered_by_start_or_reload | bool
+           or night_charge_retry_due___SLOT__ | bool
+         )
+       )
+     ) }}
+should_run_off_peak_discharge_stop_actions___SLOT__: >-
+  {{ off_peak_active | bool
+     and slot___SLOT___has_discharge_actions | bool
+     and slot___SLOT___actual_power_usable | bool
+     and slot___SLOT___actual_discharge_w | float(0) > control_deadband_w | float(0) }}
 signed_target___SLOT__: >-
   {% if discharge_active___SLOT__ %}
     {{ discharge_target___SLOT__ | float(0) }}
@@ -191,7 +241,4 @@ should_run_charge_actions___SLOT__: >-
 should_run_night_charge_actions___SLOT__: >-
   {{ slot___SLOT___has_night_charge_actions | bool
      and off_peak_active | bool
-     and (
-       off_peak_trigger_entered_active | bool
-       or triggered_by_start_or_reload | bool
-     ) }}
+     and night_charge_retry_due___SLOT__ | bool }}

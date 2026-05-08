@@ -55,6 +55,7 @@ variables:
   house_power_sensor: !input house_power_sensor
   off_peak_entities: !input off_peak_entities
   control_deadband_w: 10
+  off_peak_charge_full_soc_pct: 95
   high_soc_headroom_threshold_pct: 90
   low_soc_priority_margin_pct: 5
   low_soc_priority_gap_pct: 20
@@ -144,6 +145,16 @@ variables:
   off_peak_active: >-
     {% set entities = expand(off_peak_entities) %}
     {{ entities | selectattr('state', 'eq', 'on') | list | count > 0 }}
+  off_peak_active_age_s: >-
+    {% set entities = expand(off_peak_entities) | selectattr('state', 'eq', 'on') | list %}
+    {% set ns = namespace(age=0) %}
+    {% for entity in entities %}
+      {% set age = (run_started_ts | float(0)) - (as_timestamp(entity.last_changed) | float(0)) %}
+      {% if age > ns.age %}
+        {% set ns.age = age %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.age }}
 
   # Rebuild the underlying house demand from the net house meter plus the
   # managed battery contribution. Long-cooldown batteries keep stable active
@@ -890,7 +901,15 @@ variables:
     }}
   pending_slot_actions: >-
     {{
-      (should_run_discharge_actions_1 | bool)
+      (should_stop_off_peak_discharge_1 | bool)
+      or (should_stop_off_peak_discharge_2 | bool)
+      or (should_stop_off_peak_discharge_3 | bool)
+      or (should_stop_off_peak_discharge_4 | bool)
+      or (should_run_off_peak_discharge_stop_actions_1 | bool)
+      or (should_run_off_peak_discharge_stop_actions_2 | bool)
+      or (should_run_off_peak_discharge_stop_actions_3 | bool)
+      or (should_run_off_peak_discharge_stop_actions_4 | bool)
+      or (should_run_discharge_actions_1 | bool)
       or (should_run_discharge_actions_2 | bool)
       or (should_run_discharge_actions_3 | bool)
       or (should_run_discharge_actions_4 | bool)
@@ -906,6 +925,7 @@ variables:
   should_stop_small_house_power_delta: >-
     {{
       (should_skip_small_house_power_delta | bool)
+      and not (off_peak_active | bool)
       and not (pending_slot_target_updates | bool)
       and not (pending_slot_actions | bool)
     }}
@@ -947,6 +967,13 @@ variables:
         'discharge_locked': (not (discharge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) > 0 and not (slot_1_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) < 0,
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_1 | bool,
+        'night_charge_full': night_charge_full_1 | bool,
+        'night_charge_candidate': night_charge_candidate_1 | bool,
+        'night_charge_confirmed': night_charge_confirmed_1 | bool,
+        'night_charge_retry_due': night_charge_retry_due_1 | bool,
+        'night_charge_retry_interval_s': night_charge_retry_interval_s_1 | float(0),
+        'should_stop_off_peak_discharge': should_stop_off_peak_discharge_1 | bool,
+        'should_run_off_peak_discharge_stop_actions': should_run_off_peak_discharge_stop_actions_1 | bool,
         'should_write_target': should_write_target_power_1 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_1 | bool,
         'should_run_charge_actions': should_run_charge_actions_1 | bool,
@@ -980,6 +1007,13 @@ variables:
         'discharge_locked': (not (discharge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) > 0 and not (slot_2_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) < 0,
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_2 | bool,
+        'night_charge_full': night_charge_full_2 | bool,
+        'night_charge_candidate': night_charge_candidate_2 | bool,
+        'night_charge_confirmed': night_charge_confirmed_2 | bool,
+        'night_charge_retry_due': night_charge_retry_due_2 | bool,
+        'night_charge_retry_interval_s': night_charge_retry_interval_s_2 | float(0),
+        'should_stop_off_peak_discharge': should_stop_off_peak_discharge_2 | bool,
+        'should_run_off_peak_discharge_stop_actions': should_run_off_peak_discharge_stop_actions_2 | bool,
         'should_write_target': should_write_target_power_2 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_2 | bool,
         'should_run_charge_actions': should_run_charge_actions_2 | bool,
@@ -1013,6 +1047,13 @@ variables:
         'discharge_locked': (not (discharge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) > 0 and not (slot_3_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) < 0,
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_3 | bool,
+        'night_charge_full': night_charge_full_3 | bool,
+        'night_charge_candidate': night_charge_candidate_3 | bool,
+        'night_charge_confirmed': night_charge_confirmed_3 | bool,
+        'night_charge_retry_due': night_charge_retry_due_3 | bool,
+        'night_charge_retry_interval_s': night_charge_retry_interval_s_3 | float(0),
+        'should_stop_off_peak_discharge': should_stop_off_peak_discharge_3 | bool,
+        'should_run_off_peak_discharge_stop_actions': should_run_off_peak_discharge_stop_actions_3 | bool,
         'should_write_target': should_write_target_power_3 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_3 | bool,
         'should_run_charge_actions': should_run_charge_actions_3 | bool,
@@ -1046,6 +1087,13 @@ variables:
         'discharge_locked': (not (discharge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) > 0 and not (slot_4_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) < 0,
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_4 | bool,
+        'night_charge_full': night_charge_full_4 | bool,
+        'night_charge_candidate': night_charge_candidate_4 | bool,
+        'night_charge_confirmed': night_charge_confirmed_4 | bool,
+        'night_charge_retry_due': night_charge_retry_due_4 | bool,
+        'night_charge_retry_interval_s': night_charge_retry_interval_s_4 | float(0),
+        'should_stop_off_peak_discharge': should_stop_off_peak_discharge_4 | bool,
+        'should_run_off_peak_discharge_stop_actions': should_run_off_peak_discharge_stop_actions_4 | bool,
         'should_write_target': should_write_target_power_4 | bool,
         'should_run_discharge_actions': should_run_discharge_actions_4 | bool,
         'should_run_charge_actions': should_run_charge_actions_4 | bool,
@@ -1065,6 +1113,8 @@ actions:
       off_peak_trigger_entered_active: "{{ off_peak_trigger_entered_active }}"
       operating_mode: "{{ operating_mode }}"
       off_peak_active: "{{ off_peak_active }}"
+      off_peak_active_age_s: "{{ off_peak_active_age_s | float(0) | round(1) }}"
+      off_peak_charge_full_soc_pct: "{{ off_peak_charge_full_soc_pct | float(95) | round(1) }}"
       house_power_valid: "{{ house_power_valid }}"
       house_power_w: "{{ house_power_w | float(0) | round(1) }}"
       adjusted_house_power_w: "{{ adjusted_house_power_w | float(0) | round(1) }}"
@@ -1104,8 +1154,11 @@ actions:
       neutral_targets: "{{ neutral_targets | tojson }}"
       slots: "{{ run_log_slots_json | from_json }}"
 
-  # During off-peak periods, custom night-charge actions own the battery mode
-  # and charge power. Keep them short/idempotent, or call script.turn_on.
+  # During off-peak periods, stop discharging batteries before handing control
+  # to night-charge actions.
+  [[generated.off_peak_stop_actions]]
+
+  # Keep night-charge actions short/idempotent, or call script.turn_on.
   [[generated.night_charge_actions]]
 
   - alias: "[[trace.off_peak_gate]]"
