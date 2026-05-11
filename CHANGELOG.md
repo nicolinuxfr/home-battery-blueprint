@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.5.0
+
+- Better handling of off-peak hours charging.
+
 ## 2026.4.9
 
 - Huge simplification of the charging during off-peak hours.
