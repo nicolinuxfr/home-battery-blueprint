@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.5.1
+
+- Blueprint simplification : no more reactive battery, the cooldown field is the only one needed. 
+
 ## 2026.5.0
 
 - Better handling of off-peak hours charging.

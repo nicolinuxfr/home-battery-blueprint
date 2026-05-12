@@ -1,16 +1,12 @@
-responsive_target_allowed___SLOT__: >-
-  {{ battery___SLOT___reactive | bool
-     and battery___SLOT___cooldown_seconds | float(0) > 0
-     and (
-       (
-         slot___SLOT___can_discharge | bool
-         and battery___SLOT___cooldown_seconds | float(0) == responsive_discharge_target_cooldown_s | float(0)
-       )
-       or (
-         slot___SLOT___can_charge | bool
-         and battery___SLOT___cooldown_seconds | float(0) == responsive_charge_target_cooldown_s | float(0)
-       )
-     ) }}
+discharge_buffer___SLOT__: >-
+  {{ slot___SLOT___can_discharge | bool
+     and not (slot___SLOT___discharge_delivery_stalled | bool)
+     and discharge_buffer_cooldown_s | float(-1) >= 0
+     and battery___SLOT___cooldown_seconds | float(0) == discharge_buffer_cooldown_s | float(-1) }}
+charge_buffer___SLOT__: >-
+  {{ slot___SLOT___can_charge | bool
+     and charge_buffer_cooldown_s | float(-1) >= 0
+     and battery___SLOT___cooldown_seconds | float(0) == charge_buffer_cooldown_s | float(-1) }}
 discharge_active___SLOT__: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target___SLOT__ >= control_deadband_w | float(0) }}"
 charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold', 'off_peak_charge'] or emergency_charge_active | bool) and charge_target___SLOT__ >= control_deadband_w | float(0) }}"
 neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target___SLOT__ | abs >= control_deadband_w | float(0) }}"
@@ -90,6 +86,15 @@ desired_target_sign___SLOT__: >-
   {% else %}
     0
   {% endif %}
+responsive_target_allowed___SLOT__: >-
+  {{ (
+       desired_target_sign___SLOT__ | int(0) == 1
+       and discharge_buffer___SLOT__ | bool
+     )
+     or (
+       desired_target_sign___SLOT__ | int(0) == -1
+       and charge_buffer___SLOT__ | bool
+     ) }}
 current_target_for_control___SLOT__: >-
   {% set current = slot___SLOT___current_target_w | float(0) %}
   {% if battery___SLOT___target_power_uses_absolute_value | bool
@@ -130,7 +135,7 @@ start_from_zero_flow_confirmed___SLOT__: >-
         and house_power_valid
         and house_power_w | float(0) >= control_deadband_w | float(0)
         and (
-          battery___SLOT___reactive | bool
+          discharge_buffer___SLOT__ | bool
           or discharge_cooldown_ok___SLOT__ | bool
         ))
        or
@@ -138,7 +143,7 @@ start_from_zero_flow_confirmed___SLOT__: >-
         and house_power_valid
         and house_power_w | float(0) <= 0 - (control_deadband_w | float(0))
         and (
-          battery___SLOT___reactive | bool
+          charge_buffer___SLOT__ | bool
           or charge_cooldown_ok___SLOT__ | bool
         ))
      ) }}
