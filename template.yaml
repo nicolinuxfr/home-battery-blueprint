@@ -400,7 +400,12 @@ variables:
       responsive_trim_remaining=0,
       cooldown_ready_trim_remaining=0,
       export_latency_brake_remaining=0,
-      discharge_increase_budget_remaining=discharge_increase_budget_w | float(0)
+      discharge_increase_budget_remaining=discharge_increase_budget_w | float(0),
+      rebalance_w=0,
+      rb1=0,
+      rb2=0,
+      rb3=0,
+      rb4=0
     ) %}
     {% if operating_mode in ['discharge', 'discharge_hold'] %}
       {% for battery in discharge_hold_order %}
@@ -463,6 +468,96 @@ variables:
             {% endif %}
             {% set ns.remaining = [ns.remaining - allocation, 0] | max %}
             {% set ns.discharge_increase_budget_remaining = [ns.discharge_increase_budget_remaining | float(0) - allocation, 0] | max %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+      {% if operating_mode == 'discharge' %}
+        {% for source in discharge_trim_order %}
+          {% set source_allocation = 0 %}
+          {% if source.slot == 1 %}
+            {% set source_allocation = ns.t1 | float(0) %}
+          {% elif source.slot == 2 %}
+            {% set source_allocation = ns.t2 | float(0) %}
+          {% elif source.slot == 3 %}
+            {% set source_allocation = ns.t3 | float(0) %}
+          {% elif source.slot == 4 %}
+            {% set source_allocation = ns.t4 | float(0) %}
+          {% endif %}
+          {% if source_allocation > 0 and not source.discharge_locked %}
+            {% for destination in discharge_residual_order %}
+              {% set source_allocation = 0 %}
+              {% if source.slot == 1 %}
+                {% set source_allocation = ns.t1 | float(0) %}
+              {% elif source.slot == 2 %}
+                {% set source_allocation = ns.t2 | float(0) %}
+              {% elif source.slot == 3 %}
+                {% set source_allocation = ns.t3 | float(0) %}
+              {% elif source.slot == 4 %}
+                {% set source_allocation = ns.t4 | float(0) %}
+              {% endif %}
+              {% set destination_allocation = 0 %}
+              {% if destination.slot == 1 %}
+                {% set destination_allocation = ns.t1 | float(0) %}
+              {% elif destination.slot == 2 %}
+                {% set destination_allocation = ns.t2 | float(0) %}
+              {% elif destination.slot == 3 %}
+                {% set destination_allocation = ns.t3 | float(0) %}
+              {% elif destination.slot == 4 %}
+                {% set destination_allocation = ns.t4 | float(0) %}
+              {% endif %}
+              {% if source_allocation > 0
+                    and destination.slot != source.slot
+                    and destination.discharge_available
+                    and not destination.discharge_locked
+                    and not destination.charge_locked
+                    and destination.discharge_margin_pct | float(0) > source.discharge_margin_pct | float(0)
+                    and (
+                      destination_allocation > 0
+                      or destination.target_age_s | float(0) >= destination.cooldown_s | float(0)
+                    ) %}
+                {% set headroom = [destination.max_discharge - destination_allocation, 0] | max %}
+                {% set ramp_step = buffer_discharge_increase_step_w | float(0) if discharge_buffer_cooldown_s | float(-1) >= 0 and destination.cooldown_s | float(0) == discharge_buffer_cooldown_s | float(-1) else discharge_increase_step_w | float(0) %}
+                {% if house_power_w | float(0) >= strong_import_threshold_w | float(0) %}
+                  {% set ramp_step = [ramp_step, strong_import_discharge_increase_step_w | float(0)] | max %}
+                {% endif %}
+                {% set destination_increase_used = [destination_allocation - (destination.commanded_discharge | float(0)), 0] | max %}
+                {% set destination_ramp_headroom = [ramp_step - destination_increase_used, 0] | max %}
+                {% set transfer = [source_allocation, headroom, destination_ramp_headroom] | min %}
+                {% if transfer > 0
+                      and (
+                        transfer >= control_deadband_w | float(0)
+                        or transfer >= source_allocation
+                      ) %}
+                  {% if source.slot == 1 %}
+                    {% set ns.t1 = (source_allocation - transfer) | round(0) %}
+                    {% set ns.rb1 = ns.rb1 - transfer %}
+                  {% elif source.slot == 2 %}
+                    {% set ns.t2 = (source_allocation - transfer) | round(0) %}
+                    {% set ns.rb2 = ns.rb2 - transfer %}
+                  {% elif source.slot == 3 %}
+                    {% set ns.t3 = (source_allocation - transfer) | round(0) %}
+                    {% set ns.rb3 = ns.rb3 - transfer %}
+                  {% elif source.slot == 4 %}
+                    {% set ns.t4 = (source_allocation - transfer) | round(0) %}
+                    {% set ns.rb4 = ns.rb4 - transfer %}
+                  {% endif %}
+                  {% if destination.slot == 1 %}
+                    {% set ns.t1 = (destination_allocation + transfer) | round(0) %}
+                    {% set ns.rb1 = ns.rb1 + transfer %}
+                  {% elif destination.slot == 2 %}
+                    {% set ns.t2 = (destination_allocation + transfer) | round(0) %}
+                    {% set ns.rb2 = ns.rb2 + transfer %}
+                  {% elif destination.slot == 3 %}
+                    {% set ns.t3 = (destination_allocation + transfer) | round(0) %}
+                    {% set ns.rb3 = ns.rb3 + transfer %}
+                  {% elif destination.slot == 4 %}
+                    {% set ns.t4 = (destination_allocation + transfer) | round(0) %}
+                    {% set ns.rb4 = ns.rb4 + transfer %}
+                  {% endif %}
+                  {% set ns.rebalance_w = ns.rebalance_w + transfer %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
           {% endif %}
         {% endfor %}
       {% endif %}
@@ -624,12 +719,20 @@ variables:
     {% endif %}
     {{ {
       'targets': {'1': ns.t1, '2': ns.t2, '3': ns.t3, '4': ns.t4},
+      'rebalance_deltas': {'1': ns.rb1 | round(0), '2': ns.rb2 | round(0), '3': ns.rb3 | round(0), '4': ns.rb4 | round(0)},
+      'discharge_rebalance_w': ns.rebalance_w | round(0),
       'trimmed_locked_w': ns.trimmed_locked_w | round(0),
       'unresolved_raw_export_w': ns.trim_remaining | round(0),
       'chargeable_raw_export_w': ns.chargeable_raw_export_w | round(0),
       'export_latency_brake_w': ns.export_latency_brake_w | round(0)
     } }}
   discharge_targets: "{{ discharge_plan['targets'] }}"
+  discharge_rebalance_deltas: "{{ discharge_plan['rebalance_deltas'] }}"
+  discharge_rebalance_w: "{{ discharge_plan['discharge_rebalance_w'] | float(0) }}"
+  discharge_rebalance_delta_1: "{{ discharge_rebalance_deltas['1'] | float(0) }}"
+  discharge_rebalance_delta_2: "{{ discharge_rebalance_deltas['2'] | float(0) }}"
+  discharge_rebalance_delta_3: "{{ discharge_rebalance_deltas['3'] | float(0) }}"
+  discharge_rebalance_delta_4: "{{ discharge_rebalance_deltas['4'] | float(0) }}"
   unresolved_raw_export_w: "{{ discharge_plan['unresolved_raw_export_w'] | float(0) }}"
   chargeable_raw_export_w: "{{ discharge_plan['chargeable_raw_export_w'] | float(0) }}"
   export_latency_brake_w: "{{ discharge_plan['export_latency_brake_w'] | float(0) }}"
@@ -895,6 +998,7 @@ variables:
         'current_target_w': slot_1_current_target_w | float(0),
         'signed_target_w': signed_target_1 | float(0),
         'discharge_target_w': discharge_target_1 | float(0),
+        'discharge_rebalance_delta_w': discharge_rebalance_delta_1 | float(0),
         'charge_target_w': charge_target_1 | float(0),
         'neutral_target_w': neutral_target_1 | float(0),
         'actual_discharge_w': slot_1_actual_discharge_w | float(0),
@@ -936,6 +1040,7 @@ variables:
         'current_target_w': slot_2_current_target_w | float(0),
         'signed_target_w': signed_target_2 | float(0),
         'discharge_target_w': discharge_target_2 | float(0),
+        'discharge_rebalance_delta_w': discharge_rebalance_delta_2 | float(0),
         'charge_target_w': charge_target_2 | float(0),
         'neutral_target_w': neutral_target_2 | float(0),
         'actual_discharge_w': slot_2_actual_discharge_w | float(0),
@@ -977,6 +1082,7 @@ variables:
         'current_target_w': slot_3_current_target_w | float(0),
         'signed_target_w': signed_target_3 | float(0),
         'discharge_target_w': discharge_target_3 | float(0),
+        'discharge_rebalance_delta_w': discharge_rebalance_delta_3 | float(0),
         'charge_target_w': charge_target_3 | float(0),
         'neutral_target_w': neutral_target_3 | float(0),
         'actual_discharge_w': slot_3_actual_discharge_w | float(0),
@@ -1018,6 +1124,7 @@ variables:
         'current_target_w': slot_4_current_target_w | float(0),
         'signed_target_w': signed_target_4 | float(0),
         'discharge_target_w': discharge_target_4 | float(0),
+        'discharge_rebalance_delta_w': discharge_rebalance_delta_4 | float(0),
         'charge_target_w': charge_target_4 | float(0),
         'neutral_target_w': neutral_target_4 | float(0),
         'actual_discharge_w': slot_4_actual_discharge_w | float(0),
@@ -1080,6 +1187,7 @@ actions:
       discharge_increase_budget_w: "{{ discharge_increase_budget_w | float(0) | round(1) }}"
       discharge_increase_step_w: "{{ discharge_increase_step_w | float(0) | round(1) }}"
       buffer_discharge_increase_step_w: "{{ buffer_discharge_increase_step_w | float(0) | round(1) }}"
+      discharge_rebalance_w: "{{ discharge_rebalance_w | float(0) | round(1) }}"
       strong_import_threshold_w: "{{ strong_import_threshold_w | float(0) | round(1) }}"
       strong_import_discharge_increase_step_w: "{{ strong_import_discharge_increase_step_w | float(0) | round(1) }}"
       strong_import_discharge_budget_share_pct: "{{ strong_import_discharge_budget_share_pct | float(0) | round(1) }}"

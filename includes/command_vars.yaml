@@ -120,6 +120,7 @@ same_direction_small_adjustment___SLOT__: >-
   {{ target_value_changed___SLOT__ | bool
      and desired_target_sign___SLOT__ | int(0) != 0
      and desired_target_sign___SLOT__ | int(0) == current_target_sign_for_control___SLOT__ | int(0)
+     and discharge_rebalance_delta___SLOT__ | float(0) == 0
      and same_direction_target_delta_w___SLOT__ | float(0) < control_deadband_w | float(0) }}
 direction_change_blocked_by_cooldown___SLOT__: >-
   {{ desired_target_sign___SLOT__ | int(0) != 0
