@@ -19,7 +19,17 @@
   {% set ns.items = ns.items + [{
     'slot': __SLOT__,
     'soc': slot___SLOT___soc | float(0),
-    'discharge_margin_pct': (slot___SLOT___soc | float(0)) - (battery___SLOT___min_discharge_soc_pct | float(0)),
+    'discharge_margin_pct': (
+      [
+        [
+          ((slot___SLOT___soc | float(0)) - (battery___SLOT___min_discharge_soc_pct | float(0)))
+          / ([100 - (battery___SLOT___min_discharge_soc_pct | float(0)), 1] | max)
+          * 100,
+          0
+        ] | max,
+        100
+      ] | min
+    ),
     'cooldown_s': battery___SLOT___cooldown_seconds | float(0),
     'current_target': current_target,
     'max_discharge': battery___SLOT___max_discharge_w | float(0),

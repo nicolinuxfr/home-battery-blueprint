@@ -988,7 +988,17 @@ variables:
       '1': {
         'used': slot_1_used | bool,
         'soc': slot_1_soc | float(0),
-        'discharge_margin_pct': (slot_1_soc | float(0)) - (battery_1_min_discharge_soc_pct | float(0)),
+        'discharge_margin_pct': (
+          [
+            [
+              ((slot_1_soc | float(0)) - (battery_1_min_discharge_soc_pct | float(0)))
+              / ([100 - (battery_1_min_discharge_soc_pct | float(0)), 1] | max)
+              * 100,
+              0
+            ] | max,
+            100
+          ] | min
+        ),
         'cooldown_s': battery_1_cooldown_seconds | float(0),
         'max_discharge_w': battery_1_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_1_min_discharge_soc_pct | float(0),
@@ -1030,7 +1040,17 @@ variables:
       '2': {
         'used': slot_2_used | bool,
         'soc': slot_2_soc | float(0),
-        'discharge_margin_pct': (slot_2_soc | float(0)) - (battery_2_min_discharge_soc_pct | float(0)),
+        'discharge_margin_pct': (
+          [
+            [
+              ((slot_2_soc | float(0)) - (battery_2_min_discharge_soc_pct | float(0)))
+              / ([100 - (battery_2_min_discharge_soc_pct | float(0)), 1] | max)
+              * 100,
+              0
+            ] | max,
+            100
+          ] | min
+        ),
         'cooldown_s': battery_2_cooldown_seconds | float(0),
         'max_discharge_w': battery_2_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_2_min_discharge_soc_pct | float(0),
@@ -1072,7 +1092,17 @@ variables:
       '3': {
         'used': slot_3_used | bool,
         'soc': slot_3_soc | float(0),
-        'discharge_margin_pct': (slot_3_soc | float(0)) - (battery_3_min_discharge_soc_pct | float(0)),
+        'discharge_margin_pct': (
+          [
+            [
+              ((slot_3_soc | float(0)) - (battery_3_min_discharge_soc_pct | float(0)))
+              / ([100 - (battery_3_min_discharge_soc_pct | float(0)), 1] | max)
+              * 100,
+              0
+            ] | max,
+            100
+          ] | min
+        ),
         'cooldown_s': battery_3_cooldown_seconds | float(0),
         'max_discharge_w': battery_3_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_3_min_discharge_soc_pct | float(0),
@@ -1114,7 +1144,17 @@ variables:
       '4': {
         'used': slot_4_used | bool,
         'soc': slot_4_soc | float(0),
-        'discharge_margin_pct': (slot_4_soc | float(0)) - (battery_4_min_discharge_soc_pct | float(0)),
+        'discharge_margin_pct': (
+          [
+            [
+              ((slot_4_soc | float(0)) - (battery_4_min_discharge_soc_pct | float(0)))
+              / ([100 - (battery_4_min_discharge_soc_pct | float(0)), 1] | max)
+              * 100,
+              0
+            ] | max,
+            100
+          ] | min
+        ),
         'cooldown_s': battery_4_cooldown_seconds | float(0),
         'max_discharge_w': battery_4_max_discharge_w | float(0),
         'min_discharge_soc_pct': battery_4_min_discharge_soc_pct | float(0),
