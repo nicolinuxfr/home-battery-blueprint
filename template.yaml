@@ -134,9 +134,9 @@ variables:
   house_power_valid: "{{ is_number(house_power_state) }}"
   house_power_w: "{{ house_power_state | float(0) if house_power_valid | bool else 0 }}"
 
-  # Generated slot state treats actual-power telemetry as a guardrail: stale
-  # telemetry never proves that a battery is stalled. When telemetry is stale,
-  # allocation falls back to the commanded target and waits for a valid reading.
+  # Generated slot state treats actual-power telemetry as a guardrail: only fresh
+  # telemetry can prove that a battery is stalled. When telemetry is old or stale,
+  # allocation falls back to the commanded target and waits for a fresh reading.
   [[generated.slot_state_vars]]
 
   off_peak_active: >-

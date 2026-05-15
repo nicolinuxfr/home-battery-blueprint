@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.5.2
+
+- Fix discharge allocation.
+
 ## 2026.5.1
 
 - Blueprint simplification : no more reactive battery, the cooldown field is the only one needed. 

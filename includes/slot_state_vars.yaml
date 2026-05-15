@@ -114,6 +114,8 @@ slot___SLOT___discharge_delivery_stalled: >-
   {% if current_target <= 0
         or slot___SLOT___target_age_s | float(0) < slot___SLOT___response_grace_s | float(0) %}
     false
+  {% elif not (slot___SLOT___actual_power_fresh | bool) %}
+    false
   {% elif slot___SLOT___actual_power_stale | bool %}
     false
   {% elif slot___SLOT___actual_power_usable | bool %}
