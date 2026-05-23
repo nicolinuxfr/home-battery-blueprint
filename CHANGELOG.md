@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.6.0
+
+- Fix discharge not always starting after peak hours.
+
 ## 2026.5.2
 
 - Fix discharge allocation.
