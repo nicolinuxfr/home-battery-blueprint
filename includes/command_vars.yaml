@@ -70,11 +70,6 @@ signed_target___SLOT__: >-
   {% elif operating_mode == 'off_peak_charge'
         and slot___SLOT___current_target_w | float(0) < 0 %}
     {{ slot___SLOT___current_target_w | float(0) }}
-  {% elif operating_mode == 'off_peak_charge'
-        and battery___SLOT___target_power_uses_absolute_value | bool
-        and not (off_peak_trigger_entered_active | bool)
-        and slot___SLOT___current_target_w | float(0) > 0 %}
-    {{ 0 - (slot___SLOT___current_target_w | float(0)) }}
   {% else %}
     0
   {% endif %}
@@ -96,14 +91,7 @@ responsive_target_allowed___SLOT__: >-
        and charge_buffer___SLOT__ | bool
      ) }}
 current_target_for_control___SLOT__: >-
-  {% set current = slot___SLOT___current_target_w | float(0) %}
-  {% if battery___SLOT___target_power_uses_absolute_value | bool
-        and desired_target_sign___SLOT__ | int(0) == -1
-        and current > 0 %}
-    {{ 0 - current }}
-  {% else %}
-    {{ current }}
-  {% endif %}
+  {{ slot___SLOT___current_target_w | float(0) }}
 current_target_sign_for_control___SLOT__: >-
   {% if current_target_for_control___SLOT__ | float(0) > 0 %}
     1
