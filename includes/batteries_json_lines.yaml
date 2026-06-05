@@ -16,6 +16,7 @@
   {% set commanded_charge = [commanded_charge, battery___SLOT___max_charge_w | float(0)] | min %}
   {% set reserved_discharge = [reserved_discharge, battery___SLOT___max_discharge_w | float(0)] | min %}
   {% set reserved_charge = [reserved_charge, battery___SLOT___max_charge_w | float(0)] | min %}
+  {% set charge_direction_confirmed = slot___SLOT___actual_power_fresh | bool and slot___SLOT___actual_charge_w | float(0) > control_deadband_w | float(0) %}
   {% set ns.items = ns.items + [{
     'slot': __SLOT__,
     'soc': slot___SLOT___soc | float(0),
@@ -36,7 +37,7 @@
     'min_discharge_soc_pct': battery___SLOT___min_discharge_soc_pct | float(0),
     'max_charge': battery___SLOT___max_charge_w | float(0),
     'can_discharge': slot___SLOT___can_discharge | bool,
-    'discharge_available': (slot___SLOT___can_discharge | bool) and not (slot___SLOT___discharge_delivery_stalled | bool),
+    'discharge_available': (slot___SLOT___can_discharge | bool) and not (slot___SLOT___discharge_delivery_stalled | bool) and not charge_direction_confirmed,
     'can_charge': slot___SLOT___can_charge | bool,
     'commanded_discharge': commanded_discharge,
     'commanded_charge': commanded_charge,
@@ -46,6 +47,8 @@
     'actual_power_stale': slot___SLOT___actual_power_stale | bool,
     'actual_power_usable': slot___SLOT___actual_power_usable | bool,
     'actual_discharge': slot___SLOT___actual_discharge_w | float(0),
+    'actual_charge': slot___SLOT___actual_charge_w | float(0),
+    'charge_direction_confirmed': charge_direction_confirmed,
     'target_age_s': slot___SLOT___target_age_s | float(0),
     'response_grace_s': slot___SLOT___response_grace_s | float(0),
     'discharge_delivery_stalled': slot___SLOT___discharge_delivery_stalled | bool,

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.6.1
+
+- Better charging when solar powered batteries are at 100 % ;
+- To help the automations, a new option is added for solar powered batteries.
+
 ## 2026.6.0
 
 - Fix discharge not always starting after peak hours.

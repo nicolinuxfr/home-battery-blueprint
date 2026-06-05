@@ -56,6 +56,7 @@ variables:
   off_peak_entities: !input off_peak_entities
   control_deadband_w: 10
   off_peak_charge_full_soc_pct: 95
+  forced_solar_output_full_soc_pct: 99
   discharge_increase_step_w: 250
   buffer_discharge_increase_step_w: 500
   strong_import_threshold_w: 800
@@ -163,12 +164,40 @@ variables:
       + (slot_3_effective_balance_power | float(0))
       + (slot_4_effective_balance_power | float(0))
     }}
+  forced_solar_output_1_w: >-
+    {{ slot_1_actual_discharge_w | float(0)
+       if slot_1_current_target_w | float(0) <= control_deadband_w | float(0)
+          and battery_1_connected_to_solar_panels | bool
+          and slot_1_soc | float(0) >= forced_solar_output_full_soc_pct | float(99)
+          and slot_1_actual_power_usable | bool
+       else 0 }}
+  forced_solar_output_2_w: >-
+    {{ slot_2_actual_discharge_w | float(0)
+       if slot_2_current_target_w | float(0) <= control_deadband_w | float(0)
+          and battery_2_connected_to_solar_panels | bool
+          and slot_2_soc | float(0) >= forced_solar_output_full_soc_pct | float(99)
+          and slot_2_actual_power_usable | bool
+       else 0 }}
+  forced_solar_output_3_w: >-
+    {{ slot_3_actual_discharge_w | float(0)
+       if slot_3_current_target_w | float(0) <= control_deadband_w | float(0)
+          and battery_3_connected_to_solar_panels | bool
+          and slot_3_soc | float(0) >= forced_solar_output_full_soc_pct | float(99)
+          and slot_3_actual_power_usable | bool
+       else 0 }}
+  forced_solar_output_4_w: >-
+    {{ slot_4_actual_discharge_w | float(0)
+       if slot_4_current_target_w | float(0) <= control_deadband_w | float(0)
+          and battery_4_connected_to_solar_panels | bool
+          and slot_4_soc | float(0) >= forced_solar_output_full_soc_pct | float(99)
+          and slot_4_actual_power_usable | bool
+       else 0 }}
   uncommanded_actual_discharge_w: >-
     {{
-      (slot_1_actual_discharge_w | float(0) if (not slot_1_can_discharge | bool or (slot_1_discharge_delivery_stalled | bool and slot_1_current_target_w | float(0) <= 0)) and slot_1_actual_power_usable | bool else 0)
-      + (slot_2_actual_discharge_w | float(0) if (not slot_2_can_discharge | bool or (slot_2_discharge_delivery_stalled | bool and slot_2_current_target_w | float(0) <= 0)) and slot_2_actual_power_usable | bool else 0)
-      + (slot_3_actual_discharge_w | float(0) if (not slot_3_can_discharge | bool or (slot_3_discharge_delivery_stalled | bool and slot_3_current_target_w | float(0) <= 0)) and slot_3_actual_power_usable | bool else 0)
-      + (slot_4_actual_discharge_w | float(0) if (not slot_4_can_discharge | bool or (slot_4_discharge_delivery_stalled | bool and slot_4_current_target_w | float(0) <= 0)) and slot_4_actual_power_usable | bool else 0)
+      (slot_1_actual_discharge_w | float(0) if (forced_solar_output_1_w | float(0) > 0 or not slot_1_can_discharge | bool or (slot_1_discharge_delivery_stalled | bool and slot_1_current_target_w | float(0) <= 0)) and slot_1_actual_power_usable | bool else 0)
+      + (slot_2_actual_discharge_w | float(0) if (forced_solar_output_2_w | float(0) > 0 or not slot_2_can_discharge | bool or (slot_2_discharge_delivery_stalled | bool and slot_2_current_target_w | float(0) <= 0)) and slot_2_actual_power_usable | bool else 0)
+      + (slot_3_actual_discharge_w | float(0) if (forced_solar_output_3_w | float(0) > 0 or not slot_3_can_discharge | bool or (slot_3_discharge_delivery_stalled | bool and slot_3_current_target_w | float(0) <= 0)) and slot_3_actual_power_usable | bool else 0)
+      + (slot_4_actual_discharge_w | float(0) if (forced_solar_output_4_w | float(0) > 0 or not slot_4_can_discharge | bool or (slot_4_discharge_delivery_stalled | bool and slot_4_current_target_w | float(0) <= 0)) and slot_4_actual_power_usable | bool else 0)
     }}
   uncommanded_actual_charge_w: >-
     {{
@@ -213,6 +242,8 @@ variables:
 
   # Cooldown state must be available before building the battery list so
   # allocation can reserve locked output and redistribute only the remainder.
+  # The generated battery list also keeps a slot out of new discharge allocation
+  # while fresh actual-power telemetry confirms it is still physically charging.
   [[generated.cooldown_vars]]
 
   batteries: >-
@@ -267,7 +298,9 @@ variables:
   discharge_hold_order: >-
     {% set ns = namespace(candidates=[]) %}
     {% for battery in batteries %}
-      {% if battery.can_discharge and battery.commanded_discharge | float(0) > 0 %}
+      {% if battery.can_discharge
+            and not battery.charge_direction_confirmed
+            and battery.commanded_discharge | float(0) > 0 %}
         {% set hold = namespace(better_same_cooldown_waiting=false) %}
         {% for other in batteries %}
           {% if other.slot != battery.slot
