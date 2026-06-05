@@ -211,6 +211,11 @@ should_write_target_power___SLOT__: >-
   {% elif signed_target___SLOT__ | float(0) < 0 %}
     {{ charge_cooldown_ok___SLOT__
        or (
+         responsive_target_allowed___SLOT__ | bool
+         and forced_solar_output_active | bool
+         and signed_target___SLOT__ | float(0) < current_target_for_control___SLOT__ | float(0)
+       )
+       or (
          operating_mode == 'off_peak_charge'
          and current_target_sign_for_control___SLOT__ | int(0) == 0
        ) }}
@@ -277,7 +282,12 @@ should_run_charge_actions___SLOT__: >-
   {% elif same_direction_small_adjustment___SLOT__ | bool %}
     false
   {% else %}
-    {{ charge_cooldown_ok___SLOT__ }}
+    {{ charge_cooldown_ok___SLOT__
+       or (
+         responsive_target_allowed___SLOT__ | bool
+         and forced_solar_output_active | bool
+         and signed_target___SLOT__ | float(0) < current_target_for_control___SLOT__ | float(0)
+       ) }}
   {% endif %}
 should_run_night_charge_actions___SLOT__: >-
   {{ slot___SLOT___has_night_charge_actions | bool
