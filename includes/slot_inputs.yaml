@@ -98,9 +98,3 @@ battery___SLOT___section:
       default: []
       selector:
         action: {}
-    battery___SLOT___night_charge_actions:
-      name: "[[input.battery.night_charge_actions.name]]"
-      description: "[[input.battery.night_charge_actions.description]]"
-      default: []
-      selector:
-        action: {}

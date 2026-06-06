@@ -40,9 +40,6 @@ SLOT_COOLDOWN_TEMPLATE = load_include("cooldown_vars.yaml")
 SLOT_COMMAND_TEMPLATE = load_include("command_vars.yaml")
 
 
-SLOT_NIGHT_CHARGE_ACTION_TEMPLATE = load_include("slot_night_charge_actions.yaml")
-
-
 SLOT_OFF_PEAK_STOP_ACTION_TEMPLATE = load_include("slot_off_peak_stop_actions.yaml")
 
 
@@ -192,9 +189,6 @@ def build_generated_values() -> dict[str, str]:
         ),
         "generated.command_vars": join_blocks(
             [slotize(SLOT_COMMAND_TEMPLATE, slot) for slot in SLOTS]
-        ),
-        "generated.night_charge_actions": join_blocks(
-            [slotize(SLOT_NIGHT_CHARGE_ACTION_TEMPLATE, slot) for slot in SLOTS]
         ),
         "generated.off_peak_stop_actions": join_blocks(
             [slotize(SLOT_OFF_PEAK_STOP_ACTION_TEMPLATE, slot) for slot in SLOTS]

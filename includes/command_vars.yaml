@@ -8,34 +8,8 @@ charge_buffer___SLOT__: >-
      and charge_buffer_cooldown_s | float(-1) >= 0
      and battery___SLOT___cooldown_seconds | float(0) == charge_buffer_cooldown_s | float(-1) }}
 discharge_active___SLOT__: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target___SLOT__ >= control_deadband_w | float(0) }}"
-charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold', 'off_peak_charge'] or emergency_charge_active | bool) and charge_target___SLOT__ >= control_deadband_w | float(0) }}"
+charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold'] or emergency_charge_active | bool) and charge_target___SLOT__ >= control_deadband_w | float(0) }}"
 neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target___SLOT__ | abs >= control_deadband_w | float(0) }}"
-night_charge_retry_interval_s___SLOT__: "{{ [60, battery___SLOT___cooldown_seconds | float(0) * 3] | max }}"
-night_charge_full___SLOT__: >-
-  {{ slot___SLOT___can_charge | bool
-     and slot___SLOT___soc | float(0) >= off_peak_charge_full_soc_pct | float(95) }}
-night_charge_candidate___SLOT__: >-
-  {{ slot___SLOT___can_charge | bool
-     and slot___SLOT___soc | float(0) < off_peak_charge_full_soc_pct | float(95) }}
-night_charge_confirmed___SLOT__: >-
-  {{ slot___SLOT___actual_power_usable | bool
-     and slot___SLOT___actual_charge_w | float(0) > control_deadband_w | float(0) }}
-night_charge_retry_due___SLOT__: >-
-  {% set retry_interval = night_charge_retry_interval_s___SLOT__ | float(60) %}
-  {{ off_peak_active | bool
-     and slot___SLOT___has_night_charge_actions | bool
-     and night_charge_candidate___SLOT__ | bool
-     and not (night_charge_confirmed___SLOT__ | bool)
-     and (
-       off_peak_trigger_entered_active | bool
-       or triggered_by_start_or_reload | bool
-       or (
-         triggered_by_house_power_sensor | bool
-         and off_peak_active_age_s | float(0) >= retry_interval
-         and slot___SLOT___target_age_s | float(0) >= retry_interval
-         and ((off_peak_active_age_s | float(0)) % retry_interval) < 60
-       )
-     ) }}
 should_stop_off_peak_discharge___SLOT__: >-
   {{ off_peak_active | bool
      and slot___SLOT___target_entity_configured | bool
@@ -47,12 +21,7 @@ should_stop_off_peak_discharge___SLOT__: >-
        )
        or (
          slot___SLOT___current_target_w | float(0) > control_deadband_w | float(0)
-         and not (night_charge_confirmed___SLOT__ | bool)
-         and (
-           triggered_by_off_peak_entity | bool
-           or triggered_by_start_or_reload | bool
-           or night_charge_retry_due___SLOT__ | bool
-         )
+         and not (battery___SLOT___target_power_uses_absolute_value | bool)
        )
      ) }}
 should_run_off_peak_discharge_stop_actions___SLOT__: >-
@@ -79,14 +48,6 @@ signed_target___SLOT__: >-
     {{ 0 - (charge_target___SLOT__ | float(0)) }}
   {% elif neutral_hold_active___SLOT__ %}
     {{ neutral_target___SLOT__ | float(0) }}
-  {% elif operating_mode == 'off_peak_charge'
-        and slot___SLOT___current_target_w | float(0) < 0 %}
-    {{ slot___SLOT___current_target_w | float(0) }}
-  {% elif operating_mode == 'off_peak_charge'
-        and battery___SLOT___target_power_uses_absolute_value | bool
-        and not (off_peak_trigger_entered_active | bool)
-        and slot___SLOT___current_target_w | float(0) > 0 %}
-    {{ 0 - (slot___SLOT___current_target_w | float(0)) }}
   {% else %}
     0
   {% endif %}
@@ -227,10 +188,7 @@ should_write_target_power___SLOT__: >-
          and forced_solar_output_active | bool
          and signed_target___SLOT__ | float(0) < current_target_for_control___SLOT__ | float(0)
        )
-       or (
-         operating_mode == 'off_peak_charge'
-         and current_target_sign_for_control___SLOT__ | int(0) == 0
-       ) }}
+       }}
   {% else %}
     false
   {% endif %}
@@ -272,8 +230,6 @@ should_run_discharge_actions___SLOT__: >-
 should_run_charge_actions___SLOT__: >-
   {% if not slot___SLOT___has_charge_actions %}
     false
-  {% elif operating_mode == 'off_peak_charge' %}
-    false
   {% elif direction_change_blocked_by_cooldown___SLOT__ | bool %}
     false
   {% elif signed_target___SLOT__ | float(0) >= 0 %}
@@ -287,7 +243,6 @@ should_run_charge_actions___SLOT__: >-
        ) }}
   {% elif current_target_sign_for_control___SLOT__ | int(0) != -1 %}
     {{ start_from_zero_flow_confirmed___SLOT__ | bool
-       or (operating_mode == 'off_peak_charge' and charge_cooldown_ok___SLOT__ | bool)
        or (responsive_target_allowed___SLOT__ | bool and signed_target___SLOT__ | float(0) < 0)
        or current_target_sign_for_control___SLOT__ | int(0) != 0 }}
   {% elif absolute_charge_action_guard_due___SLOT__ | bool %}
@@ -304,7 +259,3 @@ should_run_charge_actions___SLOT__: >-
          and signed_target___SLOT__ | float(0) < current_target_for_control___SLOT__ | float(0)
        ) }}
   {% endif %}
-should_run_night_charge_actions___SLOT__: >-
-  {{ slot___SLOT___has_night_charge_actions | bool
-     and off_peak_active | bool
-     and night_charge_retry_due___SLOT__ | bool }}

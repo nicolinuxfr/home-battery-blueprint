@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.6.2
+
+- Removed off-peak charging. It was too complicated and useless, an other automation can do this just fine. 
+
 ## 2026.6.1
 
 - Better charging when solar powered batteries are at 100 % ;
