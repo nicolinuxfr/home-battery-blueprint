@@ -778,10 +778,15 @@ variables:
   chargeable_raw_export_w: "{{ discharge_plan['chargeable_raw_export_w'] | float(0) }}"
   export_latency_brake_w: "{{ discharge_plan['export_latency_brake_w'] | float(0) }}"
   emergency_charge_surplus_w: >-
+    {% set emergency_export = [
+      chargeable_raw_export_w | float(0),
+      unresolved_raw_export_w | float(0),
+      discharge_export_guard_w | float(0)
+    ] | max %}
     {% if operating_mode in ['discharge', 'discharge_hold', 'charge']
           and charge_capable_count | int(0) > 0
-          and chargeable_raw_export_w | float(0) >= opportunistic_charge_threshold_w | float(0) %}
-      {{ chargeable_raw_export_w | float(0) }}
+          and emergency_export | float(0) >= opportunistic_charge_threshold_w | float(0) %}
+      {{ emergency_export | float(0) }}
     {% else %}
       0
     {% endif %}
