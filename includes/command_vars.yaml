@@ -10,25 +10,6 @@ charge_buffer___SLOT__: >-
 discharge_active___SLOT__: "{{ operating_mode in ['discharge', 'discharge_hold'] and discharge_target___SLOT__ >= control_deadband_w | float(0) }}"
 charge_active___SLOT__: "{{ (operating_mode in ['charge', 'charge_hold'] or emergency_charge_active | bool) and charge_target___SLOT__ >= control_deadband_w | float(0) }}"
 neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target___SLOT__ | abs >= control_deadband_w | float(0) }}"
-should_stop_off_peak_discharge___SLOT__: >-
-  {{ off_peak_active | bool
-     and slot___SLOT___target_entity_configured | bool
-     and (
-       (
-         slot___SLOT___actual_power_usable | bool
-         and slot___SLOT___actual_discharge_w | float(0) > control_deadband_w | float(0)
-         and (slot___SLOT___current_target_w | float(0) | abs) > control_deadband_w | float(0)
-       )
-       or (
-         slot___SLOT___current_target_w | float(0) > control_deadband_w | float(0)
-         and not (battery___SLOT___target_power_uses_absolute_value | bool)
-       )
-     ) }}
-should_run_off_peak_discharge_stop_actions___SLOT__: >-
-  {{ off_peak_active | bool
-     and slot___SLOT___has_discharge_actions | bool
-     and slot___SLOT___actual_power_usable | bool
-     and slot___SLOT___actual_discharge_w | float(0) > control_deadband_w | float(0) }}
 full_solar_charge_stop_required___SLOT__: >-
   {{ full_solar_absorb_export_w | float(0) > 0
      and slot___SLOT___can_charge | bool
