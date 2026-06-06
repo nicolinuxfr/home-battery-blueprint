@@ -200,6 +200,13 @@ variables:
       + (forced_solar_output_4_w | float(0))
     }}
   forced_solar_output_active: "{{ forced_solar_output_total_w | float(0) > control_deadband_w | float(0) }}"
+  solar_battery_full_active: >-
+    {{
+      (battery_1_connected_to_solar_panels | bool and slot_1_soc | float(0) >= forced_solar_output_full_soc_pct | float(99))
+      or (battery_2_connected_to_solar_panels | bool and slot_2_soc | float(0) >= forced_solar_output_full_soc_pct | float(99))
+      or (battery_3_connected_to_solar_panels | bool and slot_3_soc | float(0) >= forced_solar_output_full_soc_pct | float(99))
+      or (battery_4_connected_to_solar_panels | bool and slot_4_soc | float(0) >= forced_solar_output_full_soc_pct | float(99))
+    }}
   uncommanded_actual_discharge_w: >-
     {{
       (slot_1_actual_discharge_w | float(0) if (forced_solar_output_1_w | float(0) > 0 or not slot_1_can_discharge | bool or (slot_1_discharge_delivery_stalled | bool and slot_1_current_target_w | float(0) <= 0)) and slot_1_actual_power_usable | bool else 0)
@@ -224,6 +231,14 @@ variables:
       {{ (raw_export_w | float(0)) - (control_deadband_w | float(0)) }}
     {% endif %}
   discharge_export_guard_active: "{{ discharge_export_guard_w | float(0) > 0 }}"
+  full_solar_absorb_export_w: >-
+    {% if solar_battery_full_active | bool
+          and house_power_valid
+          and raw_export_w | float(0) >= control_deadband_w | float(0) %}
+      {{ raw_export_w | float(0) }}
+    {% else %}
+      0
+    {% endif %}
   adjusted_house_power_w: >-
     {% if house_power_valid %}
       {{ (house_power_w | float(0)) + (managed_battery_power_w | float(0)) }}
@@ -781,9 +796,10 @@ variables:
     {% set emergency_export = [
       chargeable_raw_export_w | float(0),
       unresolved_raw_export_w | float(0),
-      discharge_export_guard_w | float(0)
+      full_solar_absorb_export_w | float(0)
     ] | max %}
-    {% if operating_mode in ['discharge', 'discharge_hold', 'charge']
+    {% if (operating_mode in ['discharge', 'discharge_hold', 'charge']
+           or full_solar_absorb_export_w | float(0) > 0)
           and charge_capable_count | int(0) > 0
           and emergency_export | float(0) >= opportunistic_charge_threshold_w | float(0) %}
       {{ emergency_export | float(0) }}
@@ -1282,6 +1298,10 @@ actions:
       discharge_buffer_cooldown_s: "{{ discharge_buffer_cooldown_s | float(-1) | round(1) }}"
       charge_buffer_cooldown_s: "{{ charge_buffer_cooldown_s | float(-1) | round(1) }}"
       discharge_export_guard_w: "{{ discharge_export_guard_w | float(0) | round(1) }}"
+      forced_solar_output_total_w: "{{ forced_solar_output_total_w | float(0) | round(1) }}"
+      forced_solar_output_active: "{{ forced_solar_output_active }}"
+      solar_battery_full_active: "{{ solar_battery_full_active }}"
+      full_solar_absorb_export_w: "{{ full_solar_absorb_export_w | float(0) | round(1) }}"
       responsive_discharge_export_trim_w: "{{ responsive_discharge_export_trim_w | float(0) | round(1) }}"
       cooldown_ready_discharge_export_trim_w: "{{ cooldown_ready_discharge_export_trim_w | float(0) | round(1) }}"
       discharge_trimmed_locked_w: "{{ discharge_trimmed_locked_w | float(0) | round(1) }}"
