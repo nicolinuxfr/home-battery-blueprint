@@ -60,8 +60,20 @@ should_run_off_peak_discharge_stop_actions___SLOT__: >-
      and slot___SLOT___has_discharge_actions | bool
      and slot___SLOT___actual_power_usable | bool
      and slot___SLOT___actual_discharge_w | float(0) > control_deadband_w | float(0) }}
+full_solar_charge_stop_required___SLOT__: >-
+  {{ full_solar_absorb_export_w | float(0) > 0
+     and slot___SLOT___can_charge | bool
+     and (
+       slot___SLOT___current_target_w | float(0) > control_deadband_w | float(0)
+       or (
+         slot___SLOT___actual_power_usable | bool
+         and slot___SLOT___actual_discharge_w | float(0) > control_deadband_w | float(0)
+       )
+     ) }}
 signed_target___SLOT__: >-
-  {% if discharge_active___SLOT__ %}
+  {% if full_solar_charge_stop_required___SLOT__ | bool %}
+    0
+  {% elif discharge_active___SLOT__ %}
     {{ discharge_target___SLOT__ | float(0) }}
   {% elif charge_active___SLOT__ %}
     {{ 0 - (charge_target___SLOT__ | float(0)) }}
@@ -234,7 +246,10 @@ should_run_discharge_actions___SLOT__: >-
        ) or (
          slot___SLOT___actual_power_usable | bool
          and slot___SLOT___actual_discharge_w | float(0) > control_deadband_w | float(0)
-         and discharge_cooldown_ok___SLOT__ | bool
+         and (
+           discharge_cooldown_ok___SLOT__ | bool
+           or full_solar_charge_stop_required___SLOT__ | bool
+         )
        ) }}
   {% elif discharge_increase_blocked_by_locked_reduction___SLOT__ | bool %}
     false

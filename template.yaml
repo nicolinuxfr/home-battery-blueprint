@@ -859,11 +859,14 @@ variables:
                   and battery.cooldown_s | float(0) == charge_buffer_cooldown_s | float(-1)
                 )
               )
-              and (operating_mode == 'charge'
+              and (
+                   (operating_mode == 'charge'
+                    and full_solar_absorb_export_w | float(0) <= 0)
                    or (
                      battery_discharge_target < control_deadband_w | float(0)
                      and battery.current_discharge | float(0) < control_deadband_w | float(0)
-                   )) %}
+                   )
+              ) %}
           {% set allocation = [battery.max_charge, ns.remaining] | min %}
           {% set allocation = [allocation, 0] | max %}
           {% if battery.slot == 1 %}
@@ -1089,6 +1092,7 @@ variables:
         'discharge_locked': (not (discharge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) > 0 and not (slot_1_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_1 | bool)) and slot_1_current_target_w | float(0) < 0,
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_1 | bool,
+        'full_solar_charge_stop_required': full_solar_charge_stop_required_1 | bool,
         'night_charge_full': night_charge_full_1 | bool,
         'night_charge_candidate': night_charge_candidate_1 | bool,
         'night_charge_confirmed': night_charge_confirmed_1 | bool,
@@ -1141,6 +1145,7 @@ variables:
         'discharge_locked': (not (discharge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) > 0 and not (slot_2_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_2 | bool)) and slot_2_current_target_w | float(0) < 0,
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_2 | bool,
+        'full_solar_charge_stop_required': full_solar_charge_stop_required_2 | bool,
         'night_charge_full': night_charge_full_2 | bool,
         'night_charge_candidate': night_charge_candidate_2 | bool,
         'night_charge_confirmed': night_charge_confirmed_2 | bool,
@@ -1193,6 +1198,7 @@ variables:
         'discharge_locked': (not (discharge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) > 0 and not (slot_3_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_3 | bool)) and slot_3_current_target_w | float(0) < 0,
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_3 | bool,
+        'full_solar_charge_stop_required': full_solar_charge_stop_required_3 | bool,
         'night_charge_full': night_charge_full_3 | bool,
         'night_charge_candidate': night_charge_candidate_3 | bool,
         'night_charge_confirmed': night_charge_confirmed_3 | bool,
@@ -1245,6 +1251,7 @@ variables:
         'discharge_locked': (not (discharge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) > 0 and not (slot_4_discharge_delivery_stalled | bool),
         'charge_locked': (not (charge_cooldown_ok_4 | bool)) and slot_4_current_target_w | float(0) < 0,
         'start_from_zero_flow_confirmed': start_from_zero_flow_confirmed_4 | bool,
+        'full_solar_charge_stop_required': full_solar_charge_stop_required_4 | bool,
         'night_charge_full': night_charge_full_4 | bool,
         'night_charge_candidate': night_charge_candidate_4 | bool,
         'night_charge_confirmed': night_charge_confirmed_4 | bool,
