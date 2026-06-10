@@ -499,6 +499,32 @@ variables:
                     and battery.cooldown_s | float(0) == discharge_buffer_cooldown_s | float(-1)
                   )
                 ) %}
+            {% set lower_margin_buffer_should_wait = namespace(value=false) %}
+            {% set battery_is_discharge_buffer = discharge_buffer_cooldown_s | float(-1) >= 0
+                  and battery.cooldown_s | float(0) == discharge_buffer_cooldown_s | float(-1) %}
+            {% if battery_is_discharge_buffer
+                  and raw_export_w | float(0) <= 0
+                  and house_power_w | float(0) < strong_import_threshold_w | float(0) %}
+              {% for other in discharge_residual_order %}
+                {% set other_allocation = 0 %}
+                {% if other.slot == 1 %}
+                  {% set other_allocation = ns.t1 | float(0) %}
+                {% elif other.slot == 2 %}
+                  {% set other_allocation = ns.t2 | float(0) %}
+                {% elif other.slot == 3 %}
+                  {% set other_allocation = ns.t3 | float(0) %}
+                {% elif other.slot == 4 %}
+                  {% set other_allocation = ns.t4 | float(0) %}
+                {% endif %}
+                {% if other.slot != battery.slot
+                      and other.discharge_available
+                      and not other.charge_locked
+                      and other.discharge_margin_pct | float(0) > battery.discharge_margin_pct | float(0)
+                      and other.max_discharge | float(0) > other_allocation + control_deadband_w | float(0) %}
+                  {% set lower_margin_buffer_should_wait.value = true %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
             {% set headroom = [battery.max_discharge - current_allocation, 0] | max %}
             {% set increase_allowed = raw_export_w | float(0) <= 0
                   or not (responsive_charge_absorber_available | bool)
@@ -506,7 +532,7 @@ variables:
                     discharge_buffer_cooldown_s | float(-1) >= 0
                     and battery.cooldown_s | float(0) == discharge_buffer_cooldown_s | float(-1)
                   ) %}
-            {% set allocation = [headroom, ns.remaining] | min if increase_allowed else 0 %}
+            {% set allocation = [headroom, ns.remaining] | min if increase_allowed and not lower_margin_buffer_should_wait.value else 0 %}
             {% set ramp_step = buffer_discharge_increase_step_w | float(0) if discharge_buffer_cooldown_s | float(-1) >= 0 and battery.cooldown_s | float(0) == discharge_buffer_cooldown_s | float(-1) else discharge_increase_step_w | float(0) %}
             {% if house_power_w | float(0) >= strong_import_threshold_w | float(0) %}
               {% set ramp_step = [ramp_step, strong_import_discharge_increase_step_w | float(0)] | max %}
