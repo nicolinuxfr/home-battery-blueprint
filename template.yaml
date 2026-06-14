@@ -233,23 +233,25 @@ variables:
   full_solar_existing_charge_w: >-
     {% set ns = namespace(value=0) %}
     {% if slot_1_can_charge | bool %}
-      {% set ns.value = ns.value + [0 - (slot_1_current_target_w | float(0)), slot_1_actual_charge_w | float(0), 0] | max %}
+      {% set ns.value = ns.value + [0 - (slot_1_current_target_w | float(0)), slot_1_actual_charge_w | float(0) if slot_1_actual_power_usable | bool else 0, 0] | max %}
     {% endif %}
     {% if slot_2_can_charge | bool %}
-      {% set ns.value = ns.value + [0 - (slot_2_current_target_w | float(0)), slot_2_actual_charge_w | float(0), 0] | max %}
+      {% set ns.value = ns.value + [0 - (slot_2_current_target_w | float(0)), slot_2_actual_charge_w | float(0) if slot_2_actual_power_usable | bool else 0, 0] | max %}
     {% endif %}
     {% if slot_3_can_charge | bool %}
-      {% set ns.value = ns.value + [0 - (slot_3_current_target_w | float(0)), slot_3_actual_charge_w | float(0), 0] | max %}
+      {% set ns.value = ns.value + [0 - (slot_3_current_target_w | float(0)), slot_3_actual_charge_w | float(0) if slot_3_actual_power_usable | bool else 0, 0] | max %}
     {% endif %}
     {% if slot_4_can_charge | bool %}
-      {% set ns.value = ns.value + [0 - (slot_4_current_target_w | float(0)), slot_4_actual_charge_w | float(0), 0] | max %}
+      {% set ns.value = ns.value + [0 - (slot_4_current_target_w | float(0)), slot_4_actual_charge_w | float(0) if slot_4_actual_power_usable | bool else 0, 0] | max %}
     {% endif %}
     {{ ns.value }}
   full_solar_absorb_export_w: >-
-    {% if solar_battery_full_active | bool
-          and house_power_valid
-          and raw_export_w | float(0) >= control_deadband_w | float(0) %}
-      {{ (raw_export_w | float(0)) + (full_solar_existing_charge_w | float(0)) }}
+    {% if solar_battery_full_active | bool and house_power_valid %}
+      {% set target_charge = [
+        (full_solar_existing_charge_w | float(0)) - (house_power_w | float(0)),
+        0
+      ] | max %}
+      {{ target_charge if target_charge | float(0) >= opportunistic_charge_threshold_w | float(0) else 0 }}
     {% else %}
       0
     {% endif %}
@@ -1313,6 +1315,7 @@ actions:
       forced_solar_output_total_w: "{{ forced_solar_output_total_w | float(0) | round(1) }}"
       forced_solar_output_active: "{{ forced_solar_output_active }}"
       solar_battery_full_active: "{{ solar_battery_full_active }}"
+      full_solar_existing_charge_w: "{{ full_solar_existing_charge_w | float(0) | round(1) }}"
       full_solar_absorb_export_w: "{{ full_solar_absorb_export_w | float(0) | round(1) }}"
       responsive_discharge_export_trim_w: "{{ responsive_discharge_export_trim_w | float(0) | round(1) }}"
       cooldown_ready_discharge_export_trim_w: "{{ cooldown_ready_discharge_export_trim_w | float(0) | round(1) }}"
