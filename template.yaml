@@ -230,11 +230,26 @@ variables:
       {{ (raw_export_w | float(0)) - (control_deadband_w | float(0)) }}
     {% endif %}
   discharge_export_guard_active: "{{ discharge_export_guard_w | float(0) > 0 }}"
+  full_solar_existing_charge_w: >-
+    {% set ns = namespace(value=0) %}
+    {% if slot_1_can_charge | bool %}
+      {% set ns.value = ns.value + [0 - (slot_1_current_target_w | float(0)), slot_1_actual_charge_w | float(0), 0] | max %}
+    {% endif %}
+    {% if slot_2_can_charge | bool %}
+      {% set ns.value = ns.value + [0 - (slot_2_current_target_w | float(0)), slot_2_actual_charge_w | float(0), 0] | max %}
+    {% endif %}
+    {% if slot_3_can_charge | bool %}
+      {% set ns.value = ns.value + [0 - (slot_3_current_target_w | float(0)), slot_3_actual_charge_w | float(0), 0] | max %}
+    {% endif %}
+    {% if slot_4_can_charge | bool %}
+      {% set ns.value = ns.value + [0 - (slot_4_current_target_w | float(0)), slot_4_actual_charge_w | float(0), 0] | max %}
+    {% endif %}
+    {{ ns.value }}
   full_solar_absorb_export_w: >-
     {% if solar_battery_full_active | bool
           and house_power_valid
           and raw_export_w | float(0) >= control_deadband_w | float(0) %}
-      {{ raw_export_w | float(0) }}
+      {{ (raw_export_w | float(0)) + (full_solar_existing_charge_w | float(0)) }}
     {% else %}
       0
     {% endif %}
