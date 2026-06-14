@@ -251,7 +251,7 @@ variables:
         (full_solar_existing_charge_w | float(0)) - (house_power_w | float(0)),
         0
       ] | max %}
-      {{ target_charge if target_charge | float(0) >= opportunistic_charge_threshold_w | float(0) else 0 }}
+      {{ target_charge if target_charge | float(0) >= control_deadband_w | float(0) else 0 }}
     {% else %}
       0
     {% endif %}
