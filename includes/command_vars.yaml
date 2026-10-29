@@ -13,6 +13,7 @@ neutral_hold_active___SLOT__: "{{ operating_mode == 'neutral' and neutral_target
 full_solar_charge_stop_required___SLOT__: >-
   {{ full_solar_absorb_export_w | float(0) > 0
      and slot___SLOT___can_charge | bool
+     and discharge_target___SLOT__ | float(0) < full_solar_stop_discharge_limit_w | float(0)
      and (
        slot___SLOT___current_target_w | float(0) > control_deadband_w | float(0)
        or (

@@ -1044,6 +1044,9 @@ variables:
       0
     {% endif %}
 
+  # Only stop a discharging battery for solar absorption when its planned
+  # discharge is already inside the deadband; keep positive planned discharge.
+  full_solar_stop_discharge_limit_w: "{{ control_deadband_w | float(0) }}"
   # Generated command guards let the charge buffer increase its charge target
   # immediately only when full solar-connected batteries force output.
   [[generated.command_vars]]
