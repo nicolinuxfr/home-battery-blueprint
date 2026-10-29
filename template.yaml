@@ -797,9 +797,14 @@ variables:
           {% elif battery.slot == 4 %}
             {% set current_allocation = ns.t4 | float(0) %}
           {% endif %}
+          {% set pending_discharge_drop = [
+            (battery.actual_discharge | float(0)) - (battery.commanded_discharge | float(0)),
+            0
+          ] | max %}
           {% if current_allocation > 0
-                and battery.actual_discharge | float(0) > control_deadband_w | float(0) %}
-            {% set brake_allocation = [current_allocation, ns.export_latency_brake_remaining] | min %}
+                and battery.target_age_s | float(0) < battery.response_grace_s | float(0)
+                and pending_discharge_drop > control_deadband_w | float(0) %}
+            {% set brake_allocation = [current_allocation, ns.export_latency_brake_remaining, pending_discharge_drop] | min %}
             {% if battery.slot == 1 %}
               {% set ns.t1 = (current_allocation - brake_allocation) | round(0) %}
             {% elif battery.slot == 2 %}

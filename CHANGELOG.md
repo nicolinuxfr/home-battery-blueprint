@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.10.0
+
+- Bug fixes.
+
 ## 2026.6.2
 
 - Removed off-peak charging. It was too complicated and useless, an other automation can do this just fine. 
